@@ -10,7 +10,6 @@ import { TECHNIQUES, TECHNIQUE_ORDER, DEFAULT_TECHNIQUE } from "./techniques.js"
 
 const technique = TECHNIQUES[DEFAULT_TECHNIQUE];
 document.getElementById("unitInput").value = technique.defaultUnit;
-document.getElementById("techniqueNote").textContent = technique.notes;
 
 function renderTechniqueStrip() {
   const strip = document.getElementById("techStrip");
