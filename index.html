@@ -14,10 +14,22 @@
     <p class="subtitle">Personal tool — enter the instrument signal and get concentration with calibration, dilution, LOD/LOQ.</p>
     <p class="subtitle" id="techniqueNote" style="margin-top:2px;"></p>
   </div>
-  <div class="divider"><svg width="100%" height="34" viewBox="0 0 400 34" preserveAspectRatio="none"></svg></div>
+<div class="divider"><svg width="100%" height="34" viewBox="0 0 400 34" preserveAspectRatio="none"></svg></div>
 
-  <div class="tabs">
-    <button class="tab-btn active" data-tab="calibration">Calibration</button>
+  <div class="tech-strip" id="techStrip"></div>
+
+  <details class="how-to">
+    <summary>How to use this calculator</summary>
+    <ol>
+      <li><b>Pick a calibration type</b> in the Calibration tab: external simple, internal standard, or standard addition.</li>
+      <li><b>Enter your calibration points</b> — type them in manually, or paste a table copied from Excel/CSV.</li>
+      <li>Click <b>"Calculate calibration"</b> to get the fitted line, R², LOD and LOQ.</li>
+      <li>Optionally <b>save the calibration to History</b> so you can reuse it without re-entering points.</li>
+      <li>Go to the <b>Samples</b> tab, pick the calibration to use, and enter each sample's signal plus any dilution factors to get its concentration.</li>
+    </ol>
+  </details>
+
+  <div class="tabs">    <button class="tab-btn active" data-tab="calibration">Calibration</button>
     <button class="tab-btn" data-tab="samples">Samples</button>
     <button class="tab-btn" data-tab="history">History <span id="histCount"></span></button>
   </div>

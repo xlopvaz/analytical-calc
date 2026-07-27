@@ -6,12 +6,26 @@ import { linreg, fmt, parseDilutionChain, parseNum, parseCSV } from "./math.js";
 import { loadHistory, persistHistory } from "./storage.js";
 import { drawChart, drawSpectrumDivider } from "./chart.js";
 import { COLORS } from "./colors.js";
-import { TECHNIQUES, DEFAULT_TECHNIQUE } from "./techniques.js";
+import { TECHNIQUES, TECHNIQUE_ORDER, DEFAULT_TECHNIQUE } from "./techniques.js";
 
 const technique = TECHNIQUES[DEFAULT_TECHNIQUE];
 document.getElementById("unitInput").value = technique.defaultUnit;
 document.getElementById("techniqueNote").textContent = technique.notes;
 
+function renderTechniqueStrip() {
+  const strip = document.getElementById("techStrip");
+  strip.innerHTML = "";
+  TECHNIQUE_ORDER.forEach((id) => {
+    const t = TECHNIQUES[id];
+    const pill = el("span", {
+      class: "tech-pill " + (t.status === "available" ? "available" : "soon"),
+      text: t.label,
+    });
+    pill.title = t.status === "available" ? t.fullName : t.fullName + " — coming soon";
+    strip.appendChild(pill);
+  });
+}
+renderTechniqueStrip();
 let idCounter = 1;
 const newId = () => "id_" + Date.now() + "_" + idCounter++;
 

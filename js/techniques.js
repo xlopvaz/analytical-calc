@@ -1,8 +1,9 @@
 // techniques.js
 // Registry of analytical techniques supported by the calculator.
-// Today only ICP-MS is implemented, but keeping the metadata here (instead of
-// hardcoded across the UI) means adding UV-Vis, HPLC, etc. later is mostly
-// "add an entry here + reuse math.js", not a rewrite.
+// Only ICP-MS is implemented right now (status: "available"); the rest are
+// listed with status: "coming-soon" so the UI can already show the roadmap
+// without any calculation logic behind them yet. Adding a real technique
+// later means flipping its status and reusing math.js, not rewriting the UI.
 //
 // Note on scope: this covers *concentration by calibration curve*
 // (external / internal standard / standard addition), which is the same
@@ -17,9 +18,61 @@ export const TECHNIQUES = {
     fullName: "Inductively Coupled Plasma Mass Spectrometry",
     defaultUnit: "µg/L",
     signalLabel: "signal (cps)",
+    status: "available",
     notes:
       "Concentration by calibration curve — applies the same way whether the instrument is quadrupole, TOF, or sector-field/MC. Isotope-ratio measurements are a separate calculation, not covered here.",
   },
+  icpoes: {
+    id: "icpoes",
+    label: "ICP-OES",
+    fullName: "ICP Optical Emission Spectrometry",
+    defaultUnit: "mg/L",
+    signalLabel: "emission intensity",
+    status: "coming-soon",
+  },
+  aas: {
+    id: "aas",
+    label: "AAS",
+    fullName: "Atomic Absorption Spectroscopy",
+    defaultUnit: "mg/L",
+    signalLabel: "absorbance",
+    status: "coming-soon",
+  },
+  uvvis: {
+    id: "uvvis",
+    label: "UV-Vis",
+    fullName: "UV-Visible Spectrophotometry",
+    defaultUnit: "mg/L",
+    signalLabel: "absorbance",
+    status: "coming-soon",
+  },
+  hplc: {
+    id: "hplc",
+    label: "HPLC",
+    fullName: "High-Performance Liquid Chromatography",
+    defaultUnit: "mg/L",
+    signalLabel: "peak area",
+    status: "coming-soon",
+  },
+  gc: {
+    id: "gc",
+    label: "GC",
+    fullName: "Gas Chromatography",
+    defaultUnit: "mg/L",
+    signalLabel: "peak area",
+    status: "coming-soon",
+  },
+  ic: {
+    id: "ic",
+    label: "IC",
+    fullName: "Ion Chromatography",
+    defaultUnit: "mg/L",
+    signalLabel: "peak area",
+    status: "coming-soon",
+  },
 };
+
+// Controls the display order of the technique strip in the UI.
+export const TECHNIQUE_ORDER = ["icpms", "icpoes", "aas", "uvvis", "hplc", "gc", "ic"];
 
 export const DEFAULT_TECHNIQUE = "icpms";
