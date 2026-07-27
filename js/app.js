@@ -230,13 +230,15 @@ document.getElementById("computeBtn").addEventListener("click", () => {
     blankBox.style.display = "none";
     return;
   }
-  errBox.style.display = "none";
+errBox.style.display = "none";
   reg.xs = xs;
   reg.ys = ys;
+  reg.calMin = Math.min(...xs);
+  reg.calMax = Math.max(...xs);
   reg.sampleConc = null;
   reg.sampleConcSE = null;
   reg.totalDil = 1;
-  if (state.calType === "addition") {
+   if (state.calType === "addition") {
     const dil = parseDilutionChain(document.getElementById("dilutionFinalInput").value);
     reg.totalDil = dil;
     if (reg.slope !== 0) {
@@ -334,8 +336,10 @@ regression: {
       mx: state.regression.mx,
       seSlope: state.regression.seSlope,
       seIntercept: state.regression.seIntercept,
+      calMin: state.regression.calMin,
+      calMax: state.regression.calMax,
     },
-      savedAt: Date.now(),
+        savedAt: Date.now(),
   };
   state.savedCals.unshift(record);
   persistHistory(state.savedCals);
@@ -392,7 +396,7 @@ if (c.regression.seSlope !== undefined && c.regression.seSlope !== null) {
         })
       );
     }
-    
+
     left.appendChild(el("span", { class: "date", text: new Date(c.savedAt).toLocaleString() }));
 
     if (c.points && c.points.length) {
@@ -517,7 +521,10 @@ function renderActiveCalInfo() {
   grid.appendChild(statBlock("R²", fmt(reg.r2, 5), null, reg.r2 >= 0.995 ? COLORS.teal : COLORS.amber));
   grid.appendChild(statBlock("LOD", fmt(reg.lod), c.calType === "internal" ? "" : c.unit));
   grid.appendChild(statBlock("LOQ", fmt(reg.loq), c.calType === "internal" ? "" : c.unit));
-  if (reg.n) grid.appendChild(statBlock("n points", reg.n));
+if (reg.n) grid.appendChild(statBlock("n points", reg.n));
+  if (reg.calMin !== undefined && reg.calMax !== undefined) {
+    grid.appendChild(statBlock("Cal. range", `${fmt(reg.calMin)}–${fmt(reg.calMax)}`, c.unit));
+  }
   box.innerHTML = "";
   box.appendChild(grid);
 }
@@ -652,16 +659,38 @@ const dil = parseDilutionChain(data.dilution);
 
     const unit = state.activeCal.unit;
     const belowLOQ = reg.loq !== null && reg.loq !== undefined && conc < reg.loq;
+    // Range check uses rawConc: the concentration as read directly off the
+    // curve, before dilution/blank adjustments, since that's what's
+    // actually comparable to the calibration standards' range.
+    const aboveRange = reg.calMax !== undefined && rawConc > reg.calMax;
+    const belowRange = reg.calMin !== undefined && rawConc < reg.calMin;
+
     const seText = seAvailable ? ` ± ${fmt(se, 2)}` : "";
-    resultSpan.textContent = `${fmt(conc)}${seText} ${unit}${belowLOQ ? " ⚠" : ""}`;
-    resultSpan.className = "result-cell " + (belowLOQ ? "warn" : "ok");
-    resultSpan.title = seAvailable
-      ? (belowLOQ ? "Below the LOQ of this calibration" : "")
+    let flag = "";
+    let flagClass = "ok";
+    let flagTitle = "";
+    if (aboveRange) {
+      flag = " ⚠ above cal. range";
+      flagClass = "warn";
+      flagTitle = `Above the highest calibration standard (${fmt(reg.calMax)} ${unit}) — this is an extrapolation. Consider diluting the sample and re-measuring.`;
+    } else if (belowLOQ) {
+      flag = " ⚠";
+      flagClass = "warn";
+      flagTitle = "Below the LOQ of this calibration";
+    } else if (belowRange) {
+      flag = " (below lowest standard)";
+      flagTitle = `Below the lowest calibration standard (${fmt(reg.calMin)} ${unit}) — still an extrapolation, treat with caution.`;
+    }
+
+    resultSpan.textContent = `${fmt(conc)}${seText} ${unit}${flag}`;
+    resultSpan.className = "result-cell " + flagClass;
+    resultSpan.title = flagTitle || (seAvailable
+      ? ""
       : factor === null
       ? "Not enough calibration points to compute a 95% CI (need n > 2)."
-      : "Uncertainty unavailable — this calibration was saved before SE tracking was added. Recalculate and re-save it in the Calibration tab to get ±.";
+      : "Uncertainty unavailable — this calibration was saved before SE tracking was added. Recalculate and re-save it in the Calibration tab to get ±.");
   }
-        row.recompute = recompute;
+          row.recompute = recompute;
 
   state.samples.push(data);
   document.getElementById("samplesRows").appendChild(row);
