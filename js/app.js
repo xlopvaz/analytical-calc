@@ -2,8 +2,7 @@
 // Wires up the DOM: tabs, calibration form, samples table, history list.
 // Calculation logic lives in math.js, drawing in chart.js, persistence in storage.js —
 // this file is mostly event listeners and small render functions.
-import { linreg, fmt, parseDilutionChain, parseNum, parseCSV, concentrationSE } from "./math.js";import { loadHistory, persistHistory } from "./storage.js";
-import { drawChart, drawSpectrumDivider } from "./chart.js";
+import { linreg, fmt, parseDilutionChain, parseNum, parseCSV, concentrationSE, tValue95 } from "./math.js";import { drawChart, drawSpectrumDivider } from "./chart.js";
 import { COLORS } from "./colors.js";
 import { TECHNIQUES, TECHNIQUE_ORDER, DEFAULT_TECHNIQUE } from "./techniques.js";
 
@@ -58,7 +57,31 @@ const state = {
   samples: [],
   activeCal: null, // { analyte, unit, calType, regression }
   savedCals: [],
+  uncertaintyMode: "se", // "se" | "ci95"
 };
+
+// Multiplies a standard error into the currently selected display mode.
+// Returns null when a 95% CI was requested but there aren't enough
+// calibration points to compute one (df = n - 2 must be > 0).
+function ciFactor(n) {
+  if (state.uncertaintyMode !== "ci95") return 1;
+  return tValue95(n ? n - 2 : 0);
+}
+function uncLabel(base) {
+  return state.uncertaintyMode === "ci95" ? `95% CI ${base}` : `SE ${base}`;
+}
+
+document.getElementById("uncertaintySeg").addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  document.querySelectorAll("#uncertaintySeg button").forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  state.uncertaintyMode = btn.dataset.val;
+  if (state.regression) renderResults(state.regression);
+  updateBlankDisplay();
+  document.querySelectorAll("#samplesRows .samples-row").forEach((row) => row.recompute && row.recompute());
+  if (document.getElementById("panel-history").classList.contains("active")) renderHistory();
+});
 
 drawSpectrumDivider(document.querySelector(".divider svg"));
 
@@ -270,12 +293,15 @@ function renderResults(reg) {
   grid.appendChild(statBlock("R²", fmt(reg.r2, 5), null, reg.r2 >= 0.995 ? COLORS.teal : COLORS.amber));
 grid.appendChild(statBlock("LOD", fmt(reg.lod), isInternal ? "" : unit));
   grid.appendChild(statBlock("LOQ", fmt(reg.loq), isInternal ? "" : unit));
-  grid.appendChild(statBlock("SE slope", fmt(reg.seSlope)));
-  grid.appendChild(statBlock("SE intercept", fmt(reg.seIntercept)));
+  const factor = ciFactor(reg.n);
+  grid.appendChild(statBlock(uncLabel("slope"), factor !== null ? fmt(reg.seSlope * factor) : "n/a"));
+  grid.appendChild(statBlock(uncLabel("intercept"), factor !== null ? fmt(reg.seIntercept * factor) : "n/a"));
   if (state.calType === "addition") {
-    const sampleText = reg.sampleConcSE !== null ? `${fmt(reg.sampleConc)} ± ${fmt(reg.sampleConcSE, 2)}` : fmt(reg.sampleConc);
+    let sampleText = fmt(reg.sampleConc);
+    if (reg.sampleConcSE !== null && factor !== null) sampleText += ` ± ${fmt(reg.sampleConcSE * factor, 2)}`;
     grid.appendChild(statBlock("Sample concentration", sampleText, unit, COLORS.magenta));
-  }  const extraMinX = state.calType === "addition" && reg.slope ? -reg.intercept / reg.slope : null;
+  }
+  const extraMinX = state.calType === "addition" && reg.slope ? -reg.intercept / reg.slope : null;
   drawChart(document.getElementById("calChart"), reg, isInternal, extraMinX);
 }
 
@@ -354,15 +380,19 @@ let metaText = `m=${fmt(c.regression.slope)} · b=${fmt(c.regression.intercept)}
     }
     left.appendChild(el("span", { class: "meta", text: metaText }));
 
-    if (c.regression.seSlope !== undefined && c.regression.seSlope !== null) {
+if (c.regression.seSlope !== undefined && c.regression.seSlope !== null) {
+      const hf = ciFactor(c.regression.n);
+      const label = state.uncertaintyMode === "ci95" ? "95% CI" : "SE";
       left.appendChild(
         el("span", {
           class: "meta",
-          text: `SE slope=${fmt(c.regression.seSlope)} · SE intercept=${fmt(c.regression.seIntercept)}`,
+          text: hf !== null
+            ? `${label} slope=${fmt(c.regression.seSlope * hf)} · ${label} intercept=${fmt(c.regression.seIntercept * hf)}`
+            : `95% CI unavailable (n too small)`,
         })
       );
     }
-
+    
     left.appendChild(el("span", { class: "date", text: new Date(c.savedAt).toLocaleString() }));
 
     if (c.points && c.points.length) {
@@ -382,7 +412,7 @@ let metaText = `m=${fmt(c.regression.slope)} · b=${fmt(c.regression.intercept)}
     }
 
     item.appendChild(left);
-    
+
     const actions = el("div", { class: "hist-actions" });
     if (c.calType !== "addition") {
       actions.appendChild(
@@ -459,13 +489,37 @@ function onCalSelectChange() {
     const found = state.savedCals.find((c) => c.key === val);
     state.activeCal = found ? { analyte: found.analyte, unit: found.unit, calType: found.calType, regression: found.regression } : null;
   }
-document.getElementById("samplesArea").style.display = state.activeCal ? "block" : "none";
+  document.getElementById("samplesArea").style.display = state.activeCal ? "block" : "none";
   document.getElementById("blankField").style.display = state.activeCal ? "flex" : "none";
   document.getElementById("blankSignalISInput").style.display =
     state.activeCal && state.activeCal.calType === "internal" ? "inline-block" : "none";
+  renderActiveCalInfo();
   buildSamplesHead();
   updateBlankDisplay();
   document.querySelectorAll("#samplesRows .samples-row").forEach((row) => row.recompute && row.recompute());
+}
+
+function renderActiveCalInfo() {
+  const box = document.getElementById("activeCalInfo");
+  if (!state.activeCal) {
+    box.style.display = "none";
+    box.innerHTML = "";
+    return;
+  }
+  const c = state.activeCal;
+  const reg = c.regression;
+  box.style.display = "block";
+  const grid = el("div", { class: "stats-grid", style: "margin-bottom:0;" });
+  grid.appendChild(statBlock("Analyte", c.analyte));
+  grid.appendChild(statBlock("Type", calTypeLabel(c.calType)));
+  grid.appendChild(statBlock("Slope", fmt(reg.slope)));
+  grid.appendChild(statBlock("Intercept", fmt(reg.intercept)));
+  grid.appendChild(statBlock("R²", fmt(reg.r2, 5), null, reg.r2 >= 0.995 ? COLORS.teal : COLORS.amber));
+  grid.appendChild(statBlock("LOD", fmt(reg.lod), c.calType === "internal" ? "" : c.unit));
+  grid.appendChild(statBlock("LOQ", fmt(reg.loq), c.calType === "internal" ? "" : c.unit));
+  if (reg.n) grid.appendChild(statBlock("n points", reg.n));
+  box.innerHTML = "";
+  box.appendChild(grid);
 }
 
 function computeBlankConc() {
@@ -491,7 +545,8 @@ function updateBlankDisplay() {
   const label = document.getElementById("blankResultLabel");
   const { conc, se } = computeBlankConc();
   const unit = state.activeCal ? state.activeCal.unit : "";
-  const seText = se !== null ? ` ± ${fmt(se, 2)}` : "";
+  const factor = state.activeCal ? ciFactor(state.activeCal.regression.n) : 1;
+  const seText = se !== null && factor !== null ? ` ± ${fmt(se * factor, 2)}` : "";
   label.textContent = conc !== 0 ? `Blank result: ${fmt(conc)}${seText} ${unit}` : "";
 }
 
@@ -589,10 +644,11 @@ function recompute() {
 const dil = parseDilutionChain(data.dilution);
     const seRaw = concentrationSE(reg, rawConc, 1);
     const { conc: blankConc, se: blankSE } = computeBlankConc();
+    const factor = ciFactor(reg.n);
 
     const conc = rawConc * dil - blankConc;
-    const seAvailable = seRaw !== null;
-    const se = seAvailable ? Math.sqrt((seRaw * dil) ** 2 + (blankSE || 0) ** 2) : null;
+    const seAvailable = seRaw !== null && factor !== null;
+    const se = seAvailable ? Math.sqrt((seRaw * dil) ** 2 + (blankSE || 0) ** 2) * factor : null;
 
     const unit = state.activeCal.unit;
     const belowLOQ = reg.loq !== null && reg.loq !== undefined && conc < reg.loq;
@@ -601,9 +657,11 @@ const dil = parseDilutionChain(data.dilution);
     resultSpan.className = "result-cell " + (belowLOQ ? "warn" : "ok");
     resultSpan.title = seAvailable
       ? (belowLOQ ? "Below the LOQ of this calibration" : "")
+      : factor === null
+      ? "Not enough calibration points to compute a 95% CI (need n > 2)."
       : "Uncertainty unavailable — this calibration was saved before SE tracking was added. Recalculate and re-save it in the Calibration tab to get ±.";
   }
-      row.recompute = recompute;
+        row.recompute = recompute;
 
   state.samples.push(data);
   document.getElementById("samplesRows").appendChild(row);
