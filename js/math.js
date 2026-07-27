@@ -30,14 +30,35 @@ export function linreg(xs, ys) {
     const pred = slope * xs[i] + intercept;
     ssres += (ys[i] - pred) ** 2;
   }
-  const r2 = syy !== 0 ? 1 - ssres / syy : 1;
+const r2 = syy !== 0 ? 1 - ssres / syy : 1;
   const syx = n > 2 ? Math.sqrt(ssres / (n - 2)) : 0;
   const lod = slope !== 0 ? Math.abs((3.3 * syx) / slope) : null;
   const loq = slope !== 0 ? Math.abs((10 * syx) / slope) : null;
 
-  return { slope, intercept, r2, syx, lod, loq, n };
+  // Standard errors of the fitted parameters (used to build the concentration
+  // uncertainty below). See e.g. Miller & Miller, "Statistics for Analytical Chemistry".
+  const seSlope = sxx !== 0 ? syx / Math.sqrt(sxx) : null;
+  const seIntercept = syx * Math.sqrt(1 / n + (mx * mx) / sxx);
+
+  return { slope, intercept, r2, syx, lod, loq, n, sxx, mx, seSlope, seIntercept };
 }
 
+/**
+ * Standard error of a concentration x0 predicted from this calibration
+ * (inverse prediction / "calibration error" formula).
+ * @param {object} reg - result of linreg()
+ * @param {number} x0 - the predicted concentration
+ * @param {number} replicates - number of replicate measurements of the unknown
+ *   that gave x0 (use 1 for a single reading). Pass Infinity for a value that
+ *   comes from the regression itself rather than a new measurement (e.g. the
+ *   standard-addition x-intercept), which drops that term.
+ */
+export function concentrationSE(reg, x0, replicates = 1) {
+  if (!reg || !reg.slope || !reg.sxx) return null;
+  const replicateTerm = replicates > 0 && Number.isFinite(replicates) ? 1 / replicates : 0;
+  const inner = replicateTerm + 1 / reg.n + ((x0 - reg.mx) ** 2) / reg.sxx;
+  return Math.abs(reg.syx / reg.slope) * Math.sqrt(inner);
+}
 /** Format a number for display, switching to scientific notation for very small/large values. */
 export function fmt(num, digits = 4) {
   if (num === null || num === undefined || Number.isNaN(num)) return "—";

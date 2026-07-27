@@ -2,8 +2,7 @@
 // Wires up the DOM: tabs, calibration form, samples table, history list.
 // Calculation logic lives in math.js, drawing in chart.js, persistence in storage.js —
 // this file is mostly event listeners and small render functions.
-import { linreg, fmt, parseDilutionChain, parseNum, parseCSV } from "./math.js";
-import { loadHistory, persistHistory } from "./storage.js";
+import { linreg, fmt, parseDilutionChain, parseNum, parseCSV, concentrationSE } from "./math.js";import { loadHistory, persistHistory } from "./storage.js";
 import { drawChart, drawSpectrumDivider } from "./chart.js";
 import { COLORS } from "./colors.js";
 import { TECHNIQUES, TECHNIQUE_ORDER, DEFAULT_TECHNIQUE } from "./techniques.js";
@@ -199,28 +198,53 @@ document.getElementById("computeBtn").addEventListener("click", () => {
   const ys = cols === 3 ? valid.map((p) => parseNum(p.signal) / parseNum(p.signalIS)) : valid.map((p) => parseNum(p.signal));
   const reg = linreg(xs, ys);
   const errBox = document.getElementById("regressionError");
+  const blankBox = document.getElementById("blankWarningBox");
   if (!reg) {
     errBox.style.display = "block";
     errBox.textContent = "I need at least 2 valid points, not all at the same concentration.";
     document.getElementById("resultsBox").style.display = "none";
     document.getElementById("saveCalBtn").style.display = "none";
+    blankBox.style.display = "none";
     return;
   }
   errBox.style.display = "none";
   reg.xs = xs;
   reg.ys = ys;
   reg.sampleConc = null;
+  reg.sampleConcSE = null;
   reg.totalDil = 1;
   if (state.calType === "addition") {
     const dil = parseDilutionChain(document.getElementById("dilutionFinalInput").value);
     reg.totalDil = dil;
-    reg.sampleConc = reg.slope !== 0 ? (-reg.intercept / reg.slope) * dil : null;
+    if (reg.slope !== 0) {
+      const x0 = -reg.intercept / reg.slope;
+      reg.sampleConc = x0 * dil;
+      const se = concentrationSE(reg, x0, Infinity);
+      reg.sampleConcSE = se !== null ? se * dil : null;
+    }
   }
+
+  // Blank (0-concentration point) sanity check: flag it if its residual from
+  // the fitted line is unusually large compared to the overall scatter.
+  const blankIdx = xs.indexOf(0);
+  if (blankIdx !== -1 && reg.syx > 0) {
+    const predicted = reg.intercept; // slope*0 + intercept
+    const stdResidual = Math.abs((ys[blankIdx] - predicted) / reg.syx);
+    if (stdResidual > 2.5) {
+      blankBox.style.display = "block";
+      blankBox.textContent =
+        `The blank (0-concentration) point is ${fmt(stdResidual, 2)}× further from the fitted line than the typical scatter — check for contamination, evaporation, or a data-entry mistake.`;
+    } else {
+      blankBox.style.display = "none";
+    }
+  } else {
+    blankBox.style.display = "none";
+  }
+
   state.regression = reg;
   renderResults(reg);
   document.getElementById("saveCalBtn").style.display = "inline-block";
 });
-
 function statBlock(label, value, unit, color) {
   const wrap = el("div");
   wrap.appendChild(el("span", { class: "stat-label", text: label }));
@@ -244,12 +268,14 @@ function renderResults(reg) {
   grid.appendChild(statBlock("Slope", fmt(reg.slope)));
   grid.appendChild(statBlock("Intercept", fmt(reg.intercept)));
   grid.appendChild(statBlock("R²", fmt(reg.r2, 5), null, reg.r2 >= 0.995 ? COLORS.teal : COLORS.amber));
-  grid.appendChild(statBlock("LOD", fmt(reg.lod), isInternal ? "" : unit));
+grid.appendChild(statBlock("LOD", fmt(reg.lod), isInternal ? "" : unit));
   grid.appendChild(statBlock("LOQ", fmt(reg.loq), isInternal ? "" : unit));
+  grid.appendChild(statBlock("SE slope", fmt(reg.seSlope)));
+  grid.appendChild(statBlock("SE intercept", fmt(reg.seIntercept)));
   if (state.calType === "addition") {
-    grid.appendChild(statBlock("Sample concentration", fmt(reg.sampleConc), unit, COLORS.magenta));
-  }
-  const extraMinX = state.calType === "addition" && reg.slope ? -reg.intercept / reg.slope : null;
+    const sampleText = reg.sampleConcSE !== null ? `${fmt(reg.sampleConc)} ± ${fmt(reg.sampleConcSE, 2)}` : fmt(reg.sampleConc);
+    grid.appendChild(statBlock("Sample concentration", sampleText, unit, COLORS.magenta));
+  }  const extraMinX = state.calType === "addition" && reg.slope ? -reg.intercept / reg.slope : null;
   drawChart(document.getElementById("calChart"), reg, isInternal, extraMinX);
 }
 
@@ -268,15 +294,22 @@ document.getElementById("saveCalBtn").addEventListener("click", () => {
     unit: document.getElementById("unitInput").value,
     calType: state.calType,
     points: valid,
-    regression: {
+regression: {
       slope: state.regression.slope,
       intercept: state.regression.intercept,
       r2: state.regression.r2,
       lod: state.regression.lod,
       loq: state.regression.loq,
       sampleConc: state.regression.sampleConc,
+      sampleConcSE: state.regression.sampleConcSE,
+      syx: state.regression.syx,
+      n: state.regression.n,
+      sxx: state.regression.sxx,
+      mx: state.regression.mx,
+      seSlope: state.regression.seSlope,
+      seIntercept: state.regression.seIntercept,
     },
-    savedAt: Date.now(),
+      savedAt: Date.now(),
   };
   state.savedCals.unshift(record);
   persistHistory(state.savedCals);
@@ -312,14 +345,44 @@ function renderHistory() {
     nameLine.appendChild(sub);
     left.appendChild(nameLine);
 
-    let metaText = `m=${fmt(c.regression.slope)} · b=${fmt(c.regression.intercept)} · R²=${fmt(c.regression.r2, 5)} · LOQ=${fmt(c.regression.loq)} ${c.unit}`;
+let metaText = `m=${fmt(c.regression.slope)} · b=${fmt(c.regression.intercept)} · R²=${fmt(c.regression.r2, 5)}`;
+    metaText += ` · LOD=${fmt(c.regression.lod)} · LOQ=${fmt(c.regression.loq)} ${c.unit}`;
+    if (c.regression.n) metaText += ` · n=${c.regression.n} pts`;
     if (c.calType === "addition" && c.regression.sampleConc !== null && c.regression.sampleConc !== undefined) {
-      metaText += ` · sample=${fmt(c.regression.sampleConc)} ${c.unit}`;
+      const seText = c.regression.sampleConcSE !== null && c.regression.sampleConcSE !== undefined ? ` ± ${fmt(c.regression.sampleConcSE, 2)}` : "";
+      metaText += ` · sample=${fmt(c.regression.sampleConc)}${seText} ${c.unit}`;
     }
     left.appendChild(el("span", { class: "meta", text: metaText }));
-    left.appendChild(el("span", { class: "date", text: new Date(c.savedAt).toLocaleString() }));
-    item.appendChild(left);
 
+    if (c.regression.seSlope !== undefined && c.regression.seSlope !== null) {
+      left.appendChild(
+        el("span", {
+          class: "meta",
+          text: `SE slope=${fmt(c.regression.seSlope)} · SE intercept=${fmt(c.regression.seIntercept)}`,
+        })
+      );
+    }
+
+    left.appendChild(el("span", { class: "date", text: new Date(c.savedAt).toLocaleString() }));
+
+    if (c.points && c.points.length) {
+      const det = el("details", { class: "hist-points" });
+      det.appendChild(el("summary", { text: `${c.points.length} calibration points` }));
+      const cols3 = c.calType === "internal";
+      const tbl = el("div", { class: "hist-points-table" });
+      c.points.forEach((p) => {
+        tbl.appendChild(
+          el("span", {
+            text: cols3 ? `conc=${p.conc}, signal=${p.signal}, IS=${p.signalIS}` : `conc=${p.conc}, signal=${p.signal}`,
+          })
+        );
+      });
+      det.appendChild(tbl);
+      left.appendChild(det);
+    }
+
+    item.appendChild(left);
+    
     const actions = el("div", { class: "hist-actions" });
     if (c.calType !== "addition") {
       actions.appendChild(
@@ -396,11 +459,50 @@ function onCalSelectChange() {
     const found = state.savedCals.find((c) => c.key === val);
     state.activeCal = found ? { analyte: found.analyte, unit: found.unit, calType: found.calType, regression: found.regression } : null;
   }
-  document.getElementById("samplesArea").style.display = state.activeCal ? "block" : "none";
+document.getElementById("samplesArea").style.display = state.activeCal ? "block" : "none";
+  document.getElementById("blankField").style.display = state.activeCal ? "flex" : "none";
+  document.getElementById("blankSignalISInput").style.display =
+    state.activeCal && state.activeCal.calType === "internal" ? "inline-block" : "none";
   buildSamplesHead();
+  updateBlankDisplay();
   document.querySelectorAll("#samplesRows .samples-row").forEach((row) => row.recompute && row.recompute());
 }
 
+function computeBlankConc() {
+  if (!state.activeCal) return { conc: 0, se: 0 };
+  const reg = state.activeCal.regression;
+  if (!reg || !reg.slope) return { conc: 0, se: 0 };
+  const isInternal = state.activeCal.calType === "internal";
+  const bSignal = document.getElementById("blankSignalInput").value;
+  const bIS = document.getElementById("blankSignalISInput").value;
+  if (bSignal === "") return { conc: 0, se: 0 };
+  let conc;
+  if (isInternal) {
+    if (bIS === "" || parseNum(bIS) === 0) return { conc: 0, se: 0 };
+    const ratio = parseNum(bSignal) / parseNum(bIS);
+    conc = (ratio - reg.intercept) / reg.slope;
+  } else {
+    conc = (parseNum(bSignal) - reg.intercept) / reg.slope;
+  }
+const se = concentrationSE(reg, conc, 1); // may be null if the calibration lacks SE stats
+  return { conc, se };
+}
+function updateBlankDisplay() {
+  const label = document.getElementById("blankResultLabel");
+  const { conc, se } = computeBlankConc();
+  const unit = state.activeCal ? state.activeCal.unit : "";
+  const seText = se !== null ? ` ± ${fmt(se, 2)}` : "";
+  label.textContent = conc !== 0 ? `Blank result: ${fmt(conc)}${seText} ${unit}` : "";
+}
+
+document.getElementById("blankSignalInput").addEventListener("input", () => {
+  updateBlankDisplay();
+  document.querySelectorAll("#samplesRows .samples-row").forEach((r) => r.recompute && r.recompute());
+});
+document.getElementById("blankSignalISInput").addEventListener("input", () => {
+  updateBlankDisplay();
+  document.querySelectorAll("#samplesRows .samples-row").forEach((r) => r.recompute && r.recompute());
+});
 function buildSamplesHead() {
   const isInternal = state.activeCal && state.activeCal.calType === "internal";
   const head = document.getElementById("samplesHead");
@@ -463,35 +565,45 @@ function addSampleRow() {
   });
   row.appendChild(rmBtn);
 
-  function recompute() {
+function recompute() {
     const reg = state.activeCal && state.activeCal.regression;
     if (!reg || !reg.slope) {
       resultSpan.textContent = "—";
       resultSpan.className = "result-cell";
       return;
     }
-    let conc = null;
+    let rawConc = null;
     if (isInternal) {
       if (data.signal !== "" && data.signalIS !== "" && parseNum(data.signalIS) !== 0) {
         const ratio = parseNum(data.signal) / parseNum(data.signalIS);
-        conc = (ratio - reg.intercept) / reg.slope;
+        rawConc = (ratio - reg.intercept) / reg.slope;
       }
     } else if (data.signal !== "") {
-      conc = (parseNum(data.signal) - reg.intercept) / reg.slope;
+      rawConc = (parseNum(data.signal) - reg.intercept) / reg.slope;
     }
-    if (conc === null || Number.isNaN(conc)) {
+    if (rawConc === null || Number.isNaN(rawConc)) {
       resultSpan.textContent = "—";
       resultSpan.className = "result-cell";
       return;
     }
-    conc = conc * parseDilutionChain(data.dilution);
+const dil = parseDilutionChain(data.dilution);
+    const seRaw = concentrationSE(reg, rawConc, 1);
+    const { conc: blankConc, se: blankSE } = computeBlankConc();
+
+    const conc = rawConc * dil - blankConc;
+    const seAvailable = seRaw !== null;
+    const se = seAvailable ? Math.sqrt((seRaw * dil) ** 2 + (blankSE || 0) ** 2) : null;
+
     const unit = state.activeCal.unit;
     const belowLOQ = reg.loq !== null && reg.loq !== undefined && conc < reg.loq;
-    resultSpan.textContent = fmt(conc) + " " + unit + (belowLOQ ? " ⚠" : "");
+    const seText = seAvailable ? ` ± ${fmt(se, 2)}` : "";
+    resultSpan.textContent = `${fmt(conc)}${seText} ${unit}${belowLOQ ? " ⚠" : ""}`;
     resultSpan.className = "result-cell " + (belowLOQ ? "warn" : "ok");
-    resultSpan.title = belowLOQ ? "Below the LOQ of this calibration" : "";
+    resultSpan.title = seAvailable
+      ? (belowLOQ ? "Below the LOQ of this calibration" : "")
+      : "Uncertainty unavailable — this calibration was saved before SE tracking was added. Recalculate and re-save it in the Calibration tab to get ±.";
   }
-  row.recompute = recompute;
+      row.recompute = recompute;
 
   state.samples.push(data);
   document.getElementById("samplesRows").appendChild(row);

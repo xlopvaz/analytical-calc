@@ -26,6 +26,7 @@
       <li>Click <b>"Calculate calibration"</b> to get the fitted line, R², LOD and LOQ.</li>
       <li>Optionally <b>save the calibration to History</b> so you can reuse it without re-entering points.</li>
       <li>Go to the <b>Samples</b> tab, pick the calibration to use, and enter each sample's signal plus any dilution factors to get its concentration.</li>
+      <li>Optionally enter a <b>procedural/method blank</b> signal in the Samples tab — it's automatically subtracted from every sample's result in that batch.</li>
     </ol>
   </details>
 
@@ -95,8 +96,9 @@
       <span class="save-msg" id="saveMsg"></span>
     </div>
 
-    <div id="regressionError" class="error-box" style="display:none;"></div>
-
+<div id="regressionError" class="error-box" style="display:none;"></div>
+    <div id="blankWarningBox" class="warn-box" style="display:none;"></div>
+    
     <div class="panel-box" id="resultsBox" style="display:none;">
       <div class="stats-grid" id="statsGrid"></div>
       <svg class="chart" id="calChart" viewBox="0 0 600 260" preserveAspectRatio="xMidYMid meet"></svg>
@@ -108,12 +110,22 @@
     <div class="info-note" id="additionNote" style="display:none;">
       With standard addition, concentration is calculated directly in the <b>Calibration</b> tab (it's the x-intercept of the series). This Samples tab is for external or internal-standard calibrations.
     </div>
-    <div class="field">
+<div class="field">
       <label>Calibration to use</label>
       <select id="calSelect"><option value="">— select —</option></select>
     </div>
-    <div id="samplesArea" style="display:none;">
-      <div class="samples-head" id="samplesHead"></div>
+
+    <div class="field" id="blankField" style="display:none;">
+      <label>Procedural / method blank (optional)</label>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input id="blankSignalInput" placeholder="blank signal" inputmode="decimal" style="max-width:160px;">
+        <input id="blankSignalISInput" placeholder="blank IS signal" inputmode="decimal" style="max-width:160px; display:none;">
+        <span class="hint" id="blankResultLabel"></span>
+      </div>
+      <span class="hint">Subtracted from every sample's result below. Leave empty to skip blank correction.</span>
+    </div>
+
+    <div id="samplesArea" style="display:none;">      <div class="samples-head" id="samplesHead"></div>
       <div id="samplesRows"></div>
       <div class="btn-row" style="margin-top:10px;">
         <button class="btn-ghost" id="addSampleBtn">+ Add sample</button>
