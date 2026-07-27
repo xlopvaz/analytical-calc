@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ICP-MS Concentration Calculator</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <div style="display:flex; align-items:baseline; gap:10px;">
+      <span class="eyebrow">ICP-MS</span>
+      <h1>Concentration Calculator</h1>
+    </div>
+    <p class="subtitle">Personal tool — enter the instrument signal and get concentration with calibration, dilution, LOD/LOQ.</p>
+    <p class="subtitle" id="techniqueNote" style="margin-top:2px;"></p>
+  </div>
+  <div class="divider"><svg width="100%" height="34" viewBox="0 0 400 34" preserveAspectRatio="none"></svg></div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="calibration">Calibration</button>
+    <button class="tab-btn" data-tab="samples">Samples</button>
+    <button class="tab-btn" data-tab="history">History <span id="histCount"></span></button>
+  </div>
+
+  <!-- CALIBRATION TAB -->
+  <div class="tab-panel active" id="panel-calibration">
+    <div class="row2">
+      <div class="field">
+        <label>Isotope / element</label>
+        <input id="analyteInput" value="Pb-208" placeholder="e.g. Pb-208">
+      </div>
+      <div class="field">
+        <label>Unit</label>
+        <input id="unitInput" placeholder="e.g. µg/L">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Calibration type</label>
+      <div class="segmented" id="calTypeSeg">
+        <button class="active" data-val="external">External simple</button>
+        <button data-val="internal">Internal standard</button>
+        <button data-val="addition">Standard addition</button>
+      </div>
+    </div>
+
+    <div class="field" id="dilutionFinalField" style="display:none;">
+      <label>Final dilution factor (optional)</label>
+      <input id="dilutionFinalInput" placeholder="e.g. 10, 2">
+      <span class="hint">If the addition series was prepared from a pre-diluted aliquot, enter the factor(s) here (e.g. 10, 2) to refer the result back to the original sample.</span>
+    </div>
+
+    <div class="panel-box">
+      <div class="panel-box-header">
+        <span class="label" id="pointsLabel">Calibration points</span>
+        <div class="segmented" id="entryModeSeg">
+          <button class="active" data-val="manual">Manual</button>
+          <button data-val="paste">Paste / CSV</button>
+        </div>
+      </div>
+
+      <div id="manualEntry">
+        <div class="points-head cols2" id="pointsHead">
+          <span>Concentration</span><span>Analyte signal</span><span></span>
+        </div>
+        <div id="pointsRows"></div>
+        <button class="btn-ghost" id="addRowBtn" style="margin-top:8px; padding:6px 12px; font-size:12px;">+ Add row</button>
+      </div>
+
+      <div id="pasteEntry" style="display:none;">
+        <textarea id="pasteTextarea" placeholder="0, 120&#10;1, 340&#10;5, 1500"></textarea>
+        <div class="btn-row" style="margin-top:8px;">
+          <button class="btn-ghost" id="applyPasteBtn">Parse data</button>
+          <span class="hint" id="pasteHint">2 columns: conc, signal · separated by comma, tab or semicolon</span>
+        </div>
+        <div id="pasteError" class="hint" style="color:var(--red); display:none;"></div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-primary" id="computeBtn">Calculate calibration</button>
+      <button class="btn-ghost" id="saveCalBtn" style="display:none;">Save to history</button>
+      <span class="save-msg" id="saveMsg"></span>
+    </div>
+
+    <div id="regressionError" class="error-box" style="display:none;"></div>
+
+    <div class="panel-box" id="resultsBox" style="display:none;">
+      <div class="stats-grid" id="statsGrid"></div>
+      <svg class="chart" id="calChart" viewBox="0 0 600 260" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+  </div>
+
+  <!-- SAMPLES TAB -->
+  <div class="tab-panel" id="panel-samples">
+    <div class="info-note" id="additionNote" style="display:none;">
+      With standard addition, concentration is calculated directly in the <b>Calibration</b> tab (it's the x-intercept of the series). This Samples tab is for external or internal-standard calibrations.
+    </div>
+    <div class="field">
+      <label>Calibration to use</label>
+      <select id="calSelect"><option value="">— select —</option></select>
+    </div>
+    <div id="samplesArea" style="display:none;">
+      <div class="samples-head" id="samplesHead"></div>
+      <div id="samplesRows"></div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn-ghost" id="addSampleBtn">+ Add sample</button>
+        <button class="btn-ghost" id="copySamplesBtn">Copy results table</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORY TAB -->
+  <div class="tab-panel" id="panel-history">
+    <div id="historyList"></div>
+  </div>
+
+  <div class="footer-note">
+    Personal calculation tool — always double-check results against your own analytical judgment. LOD/LOQ estimated as 3.3·Sy/x/m and 10·Sy/x/m. Calibrations are saved locally in this browser (localStorage).
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
