@@ -1,10 +1,15 @@
-# ICP-MS Concentration Calculator
+# Analytical Concentration Calculator
 
-A small personal tool to go from raw ICP-MS signal to final concentration:
-calibration curve, internal standard correction, standard addition, dilution
-factors, and LOD/LOQ — all in the browser, no server, no build step.
+A personal tool to go from raw instrument signal to final concentration,
+across different analytical instrumental techniques: calibration curve,
+internal standard correction, standard addition, dilution factors, and
+LOD/LOQ — all in the browser, no server, no build step.
 
-Built as a companion tool alongside my TFG work in analytical chemistry.
+
+**ICP-MS is the first technique implemented**; more are planned (see
+Roadmap below).
+
+**Live site:** https://xlopvaz.github.io/analytical-calc/
 
 ## Features
 
