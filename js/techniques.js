@@ -44,15 +44,17 @@ icpoes: {
     kind: "curve",
     notes: "Concentration by calibration curve (external / internal standard / standard addition) — same engine as ICP-MS, with emission intensity as the signal instead of counts.",
   },
-    aas: {
+aas: {
     id: "aas",
     label: "AAS",
     fullName: "Atomic Absorption Spectroscopy",
     defaultUnit: "mg/L",
     signalLabel: "absorbance",
-    status: "coming-soon",
+    status: "available",
+    kind: "curve",
+    notes: "Concentration by calibration curve (external / internal standard / standard addition) — same engine as ICP-MS, with atomic absorbance as the signal. Standard addition is especially common here due to matrix effects.",
   },
-uvvis: {
+  uvvis: {
     id: "uvvis",
     label: "UV-Vis",
     fullName: "UV-Visible Spectrophotometry",
