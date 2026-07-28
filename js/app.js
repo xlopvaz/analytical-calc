@@ -8,8 +8,12 @@ import { drawChart, drawSpectrumDivider } from "./chart.js";
 import { COLORS } from "./colors.js";
 import { TECHNIQUES, TECHNIQUE_ORDER, DEFAULT_TECHNIQUE } from "./techniques.js";
 
-const technique = TECHNIQUES[DEFAULT_TECHNIQUE];
-document.getElementById("unitInput").value = technique.defaultUnit;
+function applyTechniqueDefaults() {
+  const t = TECHNIQUES[state.activeTechId];
+  if (t.kind === "curve") {
+    document.getElementById("unitInput").value = t.defaultUnit;
+  }
+}
 
 function renderTechniqueStrip() {
   const strip = document.getElementById("techStrip");
@@ -23,14 +27,16 @@ function renderTechniqueStrip() {
       text: t.label,
     });
     pill.title = isAvailable ? t.fullName : t.fullName + " — coming soon";
-    if (isAvailable) {
+if (isAvailable) {
       pill.addEventListener("click", () => {
         state.activeTechId = id;
         renderTechniqueStrip();
         updateSamplesModeVisibility();
+        applyTechniqueDefaults();
+        refreshCalSelect();
       });
     }
-    strip.appendChild(pill);
+        strip.appendChild(pill);
   });
 }
 
@@ -94,6 +100,106 @@ document.getElementById("lodMethodSeg").addEventListener("click", (e) => {
   document.querySelectorAll("#lodMethodSeg button").forEach((b) => b.classList.remove("active"));
   btn.classList.add("active");
   document.getElementById("lodBlankRepsField").style.display = btn.dataset.val === "blankReps" ? "block" : "none";
+});
+
+document.getElementById("concMethodSeg").addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  document.querySelectorAll("#concMethodSeg button").forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  document.getElementById("curveMethodArea").style.display = btn.dataset.val === "curve" ? "block" : "none";
+  document.getElementById("directMethodArea").style.display = btn.dataset.val === "direct" ? "block" : "none";
+});
+
+// ---------- direct Beer-Lambert calculation ----------
+const directSamples = [];
+
+function computeDirectConc(absorbance, dilutionText) {
+  const epsilon = parseNum(document.getElementById("epsilonInput").value);
+  const pathLength = parseNum(document.getElementById("pathLengthInput").value);
+  const molarMass = parseNum(document.getElementById("molarMassInput").value);
+  if (Number.isNaN(epsilon) || epsilon === 0 || Number.isNaN(pathLength) || pathLength === 0 || Number.isNaN(absorbance)) {
+    return null;
+  }
+  const dil = parseDilutionChain(dilutionText);
+  const molar = (absorbance / (epsilon * pathLength)) * dil; // mol/L
+  const massConcMgL = !Number.isNaN(molarMass) && molarMass > 0 ? molar * molarMass * 1000 : null; // mg/L
+  return { molar, massConcMgL };
+}
+
+function addDirectSampleRow() {
+  const data = { name: "", absorbance: "", dilution: "" };
+  const row = el("div", { class: "samples-row" });
+  row.style.display = "grid";
+  row.style.gridTemplateColumns = "1.2fr 1fr 1fr 1fr 28px";
+  row.style.gap = "8px";
+  row.style.alignItems = "center";
+  row.style.marginTop = "8px";
+
+  const nameInput = el("input", { placeholder: "sample ID" });
+  nameInput.addEventListener("input", () => (data.name = nameInput.value));
+  row.appendChild(nameInput);
+
+  const absInput = el("input", { placeholder: "0", inputmode: "decimal" });
+  absInput.addEventListener("input", () => {
+    data.absorbance = absInput.value;
+    recompute();
+  });
+  row.appendChild(absInput);
+
+  const dilInput = el("input", { placeholder: "1" });
+  dilInput.addEventListener("input", () => {
+    data.dilution = dilInput.value;
+    recompute();
+  });
+  row.appendChild(dilInput);
+
+  const resultSpan = el("span", { class: "result-cell", text: "—" });
+  row.appendChild(resultSpan);
+
+  const rmBtn = el("button", {
+    class: "remove-btn",
+    text: "×",
+    onclick: () => {
+      const idx = directSamples.indexOf(data);
+      if (idx !== -1) directSamples.splice(idx, 1);
+      row.remove();
+    },
+  });
+  row.appendChild(rmBtn);
+
+  function recompute() {
+    const result = computeDirectConc(parseNum(data.absorbance), data.dilution);
+    if (!result) {
+      resultSpan.textContent = "—";
+      return;
+    }
+    resultSpan.textContent = result.massConcMgL !== null
+      ? `${fmt(result.molar, 4)} mol/L (${fmt(result.massConcMgL, 4)} mg/L)`
+      : `${fmt(result.molar, 4)} mol/L`;
+  }
+  row.recompute = recompute;
+
+  directSamples.push(data);
+  document.getElementById("directSamplesRows").appendChild(row);
+}
+
+document.getElementById("addDirectSampleBtn").addEventListener("click", addDirectSampleRow);
+
+["epsilonInput", "pathLengthInput", "molarMassInput"].forEach((id) => {
+  document.getElementById(id).addEventListener("input", () => {
+    document.querySelectorAll("#directSamplesRows .samples-row").forEach((row) => row.recompute && row.recompute());
+  });
+});
+
+document.getElementById("copyDirectSamplesBtn").addEventListener("click", () => {
+  const header = ["sample", "molar (mol/L)", "mass conc (mg/L)"].join("\t");
+  const rows = directSamples.map((d) => {
+    const r = computeDirectConc(parseNum(d.absorbance), d.dilution);
+    return [d.name || "(unnamed)", r ? fmt(r.molar, 4) : "—", r && r.massConcMgL !== null ? fmt(r.massConcMgL, 4) : "—"].join("\t");
+  });
+  const text = [header, ...rows].join("\n");
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(() => {});
 });
 
 document.getElementById("uncertaintySeg").addEventListener("click", (e) => {
@@ -375,8 +481,8 @@ document.getElementById("saveCalBtn").addEventListener("click", () => {
 const calBlankVal = document.getElementById("calBlankSignalInput").value;
   const record = {
     key: newId(),
-    technique: technique.id,
-    analyte: document.getElementById("analyteInput").value || "(unnamed)",
+    technique: state.activeTechId,
+        analyte: document.getElementById("analyteInput").value || "(unnamed)",
     unit: document.getElementById("unitInput").value,
     calType: state.calType,
     calBlankSignal: calBlankVal !== "" ? parseNum(calBlankVal) : null,
@@ -428,10 +534,11 @@ function renderHistory() {
   state.savedCals.forEach((c) => {
     const item = el("div", { class: "hist-item" });
     const left = el("div");
-    const nameLine = el("span", { class: "name" });
+const nameLine = el("span", { class: "name" });
     nameLine.textContent = c.analyte + " ";
     const sub = el("span", { class: "sub" });
-    sub.textContent = "· " + calTypeLabel(c.calType);
+    const techLabel = TECHNIQUES[c.technique] ? TECHNIQUES[c.technique].label : c.technique;
+    sub.textContent = `· ${techLabel} · ${calTypeLabel(c.calType)}`;
     nameLine.appendChild(sub);
     left.appendChild(nameLine);
 
@@ -485,12 +592,17 @@ if (c.regression.seSlope !== undefined && c.regression.seSlope !== null) {
         el("button", {
           class: "btn-ghost",
           text: "Use in samples",
-          onclick: () => {
+onclick: () => {
+            state.activeTechId = c.technique;
+            renderTechniqueStrip();
+            updateSamplesModeVisibility();
+            applyTechniqueDefaults();
             document.querySelector('.tab-btn[data-tab="samples"]').click();
+            refreshCalSelect();
             document.getElementById("calSelect").value = c.key;
             onCalSelectChange();
           },
-        })
+              })
       );
     }
     actions.appendChild(
@@ -516,7 +628,7 @@ function refreshCalSelect() {
   const prevVal = sel.value;
   sel.innerHTML = "";
   sel.appendChild(el("option", { value: "", text: "— select —" }));
-  if (state.regression && state.calType !== "addition") {
+if (state.regression && state.calType !== "addition") {
     sel.appendChild(
       el("option", {
         value: "current",
@@ -525,9 +637,9 @@ function refreshCalSelect() {
     );
   }
   state.savedCals
-    .filter((c) => c.calType !== "addition")
+    .filter((c) => c.calType !== "addition" && c.technique === state.activeTechId)
     .forEach((c) => {
-      sel.appendChild(
+            sel.appendChild(
         el("option", {
           value: c.key,
           text: `${c.analyte} · ${c.calType === "internal" ? "IS" : "external"} · ${new Date(c.savedAt).toLocaleDateString()}`,
@@ -931,6 +1043,7 @@ document.getElementById("computeSsbBtn").addEventListener("click", () => {
 state.savedCals = loadHistory();
 updateHistCount();
 resetPointsTable();
-refreshCalSelect();
 renderTechniqueStrip();
+applyTechniqueDefaults();
+refreshCalSelect();
 updateSamplesModeVisibility();

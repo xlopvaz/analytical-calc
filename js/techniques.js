@@ -50,15 +50,17 @@ export const TECHNIQUES = {
     signalLabel: "absorbance",
     status: "coming-soon",
   },
-  uvvis: {
+uvvis: {
     id: "uvvis",
     label: "UV-Vis",
     fullName: "UV-Visible Spectrophotometry",
     defaultUnit: "mg/L",
     signalLabel: "absorbance",
-    status: "coming-soon",
+    status: "available",
+    kind: "curve",
+    notes: "Concentration by calibration curve (external / internal standard / standard addition) — same engine as ICP-MS, with absorbance as the signal instead of counts.",
   },
-  hplc: {
+    hplc: {
     id: "hplc",
     label: "HPLC",
     fullName: "High-Performance Liquid Chromatography",
