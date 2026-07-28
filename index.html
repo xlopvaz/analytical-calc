@@ -47,6 +47,7 @@
       <li>Go to the <b>Samples</b> tab, pick the calibration to use, and enter each sample's signal plus any dilution factors to get its concentration.</li>
       <li>Optionally enter a <b>procedural/method blank</b> signal in the Samples tab — it's automatically subtracted from every sample's result in that batch.</li>
       <li>For <b>MC-ICP-MS</b>, select that pill above the tabs to switch the Samples tab to replicate statistics and sample-standard bracketing (SSB) instead.</li>
+      <li>For techniques with several compounds per run (e.g. HPLC), switch <b>"Calibration mode"</b> to Multi-analyte batch, in both the Calibration and Samples tabs.</li>
     </ol>
   </details>
 
@@ -58,97 +59,144 @@
 
   <!-- CALIBRATION TAB -->
   <div class="tab-panel active" id="panel-calibration">
-    <div class="row2">
+
+    <div class="field" style="margin-bottom:16px; max-width:340px;">
+      <label>Calibration mode</label>
+      <div class="segmented" id="calModeSeg">
+        <button class="active" data-val="single">Single analyte</button>
+        <button data-val="batch">Multi-analyte batch</button>
+      </div>
+    </div>
+
+    <div id="singleAnalyteCalArea">
+      <div class="row2">
+        <div class="field">
+          <label>Isotope / element</label>
+          <input id="analyteInput" value="Pb-208" placeholder="e.g. Pb-208">
+        </div>
+        <div class="field">
+          <label>Unit</label>
+          <input id="unitInput" placeholder="e.g. µg/L">
+        </div>
+      </div>
+
       <div class="field">
-        <label>Isotope / element</label>
-        <input id="analyteInput" value="Pb-208" placeholder="e.g. Pb-208">
+        <label>Calibration type</label>
+        <div class="segmented" id="calTypeSeg">
+          <button class="active" data-val="external">External simple</button>
+          <button data-val="internal">Internal standard</button>
+          <button data-val="addition">Standard addition</button>
+        </div>
+      </div>
+
+      <div class="field" id="dilutionFinalField" style="display:none;">
+        <label>Final dilution factor (optional)</label>
+        <input id="dilutionFinalInput" placeholder="e.g. 10, 2">
+        <span class="hint">If the addition series was prepared from a pre-diluted aliquot, enter the factor(s) here (e.g. 10, 2) to refer the result back to the original sample.</span>
+      </div>
+
+      <div class="field" id="calBlankField">
+        <label>Blank signal (optional)</label>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <input id="calBlankSignalInput" placeholder="blank signal" inputmode="decimal" style="max-width:160px;">
+          <input id="calBlankSignalISInput" placeholder="blank IS signal" inputmode="decimal" style="max-width:160px; display:none;">
+        </div>
+        <span class="hint">Subtracted from every calibration point's signal before fitting the line (net-signal correction) — separate from including a 0-concentration point in the curve.</span>
+      </div>
+
+      <div class="field">
+        <label>LOD/LOQ method</label>
+        <div class="segmented" id="lodMethodSeg">
+          <button class="active" data-val="curve">Calibration curve (Sy/x)</button>
+          <button data-val="blankReps">Blank replicates</button>
+        </div>
+      </div>
+
+      <div class="field" id="lodBlankRepsField" style="display:none;">
+        <label>Blank replicate signals (one per line, or comma/tab separated — min. 2)</label>
+        <textarea id="lodBlankRepsInput" placeholder="0.8&#10;1.1&#10;0.9&#10;1.0"></textarea>
+        <span class="hint">LOD/LOQ computed as 3.3×SD/slope and 10×SD/slope, using the standard deviation of these replicate blank measurements (IUPAC / ICH Q2 blank-based method) — instead of the residual SD of the calibration curve.</span>
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-box-header">
+          <span class="label" id="pointsLabel">Calibration points</span>
+          <div class="segmented" id="entryModeSeg">
+            <button class="active" data-val="manual">Manual</button>
+            <button data-val="paste">Paste / CSV</button>
+          </div>
+        </div>
+
+        <div id="manualEntry">
+          <div class="points-head cols2" id="pointsHead">
+            <span>Concentration</span><span>Analyte signal</span><span></span>
+          </div>
+          <div id="pointsRows"></div>
+          <button class="btn-ghost" id="addRowBtn" style="margin-top:8px; padding:6px 12px; font-size:12px;">+ Add row</button>
+        </div>
+
+        <div id="pasteEntry" style="display:none;">
+          <textarea id="pasteTextarea" placeholder="0, 120&#10;1, 340&#10;5, 1500"></textarea>
+          <div class="btn-row" style="margin-top:8px;">
+            <button class="btn-ghost" id="applyPasteBtn">Parse data</button>
+            <span class="hint" id="pasteHint">2 columns: conc, signal · separated by comma, tab or semicolon</span>
+          </div>
+          <div id="pasteError" class="hint" style="color:var(--red); display:none;"></div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn-primary" id="computeBtn">Calculate calibration</button>
+        <button class="btn-ghost" id="saveCalBtn" style="display:none;">Save to history</button>
+        <span class="save-msg" id="saveMsg"></span>
+      </div>
+
+      <div id="regressionError" class="error-box" style="display:none;"></div>
+      <div id="blankWarningBox" class="warn-box" style="display:none;"></div>
+
+      <div class="panel-box" id="resultsBox" style="display:none;">
+        <div class="stats-grid" id="statsGrid"></div>
+        <div class="info-note" id="seNoteCalibration">
+          <b>About the ± values:</b> use the <b>"Uncertainty display"</b> switch above to choose between the raw <b>standard error</b> (~68% confidence) or a <b>95% confidence interval</b> (SE × Student's t, using n−2 degrees of freedom). Either way, it only reflects the scatter of the calibration points; it does not include volumetric, weighing, or instrument-drift uncertainty.
+        </div>
+        <svg class="chart" id="calChart" viewBox="0 0 600 260" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+    </div>
+
+    <div id="batchCalArea" style="display:none;">
+      <div class="info-note">
+        Multi-analyte batches use <b>external calibration only</b>, curve-based LOD/LOQ, and no uncertainty (SE/CI) or blank subtraction yet — for those, use "Single analyte" mode. Each analyte can have its own concentration levels.
       </div>
       <div class="field">
-        <label>Unit</label>
-        <input id="unitInput" placeholder="e.g. µg/L">
+        <label>Batch name</label>
+        <input id="batchNameInput" placeholder="e.g. HPLC run 2026-07-28">
       </div>
-    </div>
 
-    <div class="field">
-      <label>Calibration type</label>
-      <div class="segmented" id="calTypeSeg">
-        <button class="active" data-val="external">External simple</button>
-        <button data-val="internal">Internal standard</button>
-        <button data-val="addition">Standard addition</button>
-      </div>
-    </div>
+      <div class="panel-box">
+        <div class="panel-box-header"><span class="label">Calibration points (analyte, concentration, signal)</span></div>
+        <div class="points-head" style="grid-template-columns:1.2fr 1fr 1fr 28px;">
+          <span>Analyte</span><span>Concentration</span><span>Signal</span><span></span>
+        </div>
+        <div id="batchPointsRows"></div>
+        <button class="btn-ghost" id="addBatchRowBtn" style="margin-top:8px; padding:6px 12px; font-size:12px;">+ Add row</button>
 
-    <div class="field" id="dilutionFinalField" style="display:none;">
-      <label>Final dilution factor (optional)</label>
-      <input id="dilutionFinalInput" placeholder="e.g. 10, 2">
-      <span class="hint">If the addition series was prepared from a pre-diluted aliquot, enter the factor(s) here (e.g. 10, 2) to refer the result back to the original sample.</span>
-    </div>
-
-    <div class="field" id="calBlankField">
-      <label>Blank signal (optional)</label>
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <input id="calBlankSignalInput" placeholder="blank signal" inputmode="decimal" style="max-width:160px;">
-        <input id="calBlankSignalISInput" placeholder="blank IS signal" inputmode="decimal" style="max-width:160px; display:none;">
-      </div>
-      <span class="hint">Subtracted from every calibration point's signal before fitting the line (net-signal correction) — separate from including a 0-concentration point in the curve.</span>
-    </div>
-
-    <div class="field">
-      <label>LOD/LOQ method</label>
-      <div class="segmented" id="lodMethodSeg">
-        <button class="active" data-val="curve">Calibration curve (Sy/x)</button>
-        <button data-val="blankReps">Blank replicates</button>
-      </div>
-    </div>
-
-    <div class="field" id="lodBlankRepsField" style="display:none;">
-      <label>Blank replicate signals (one per line, or comma/tab separated — min. 2)</label>
-      <textarea id="lodBlankRepsInput" placeholder="0.8&#10;1.1&#10;0.9&#10;1.0"></textarea>
-      <span class="hint">LOD/LOQ computed as 3.3×SD/slope and 10×SD/slope, using the standard deviation of these replicate blank measurements (IUPAC / ICH Q2 blank-based method) — instead of the residual SD of the calibration curve.</span>
-    </div>
-
-    <div class="panel-box">
-      <div class="panel-box-header">
-        <span class="label" id="pointsLabel">Calibration points</span>
-        <div class="segmented" id="entryModeSeg">
-          <button class="active" data-val="manual">Manual</button>
-          <button data-val="paste">Paste / CSV</button>
+        <div class="field" style="margin-top:16px;">
+          <label>Or paste a table (3 columns: analyte, concentration, signal)</label>
+          <textarea id="batchPasteTextarea" placeholder="Caffeine, 1, 120&#10;Caffeine, 5, 600&#10;Paracetamol, 1, 95&#10;Paracetamol, 5, 470"></textarea>
+          <div class="btn-row" style="margin-top:8px;">
+            <button class="btn-ghost" id="applyBatchPasteBtn">Parse data</button>
+          </div>
+          <div id="batchPasteError" class="hint" style="color:var(--red); display:none;"></div>
         </div>
       </div>
 
-      <div id="manualEntry">
-        <div class="points-head cols2" id="pointsHead">
-          <span>Concentration</span><span>Analyte signal</span><span></span>
-        </div>
-        <div id="pointsRows"></div>
-        <button class="btn-ghost" id="addRowBtn" style="margin-top:8px; padding:6px 12px; font-size:12px;">+ Add row</button>
+      <div class="btn-row">
+        <button class="btn-primary" id="computeBatchBtn">Calculate batch</button>
+        <button class="btn-ghost" id="saveBatchBtn" style="display:none;">Save batch to history</button>
+        <span class="save-msg" id="batchSaveMsg"></span>
       </div>
 
-      <div id="pasteEntry" style="display:none;">
-        <textarea id="pasteTextarea" placeholder="0, 120&#10;1, 340&#10;5, 1500"></textarea>
-        <div class="btn-row" style="margin-top:8px;">
-          <button class="btn-ghost" id="applyPasteBtn">Parse data</button>
-          <span class="hint" id="pasteHint">2 columns: conc, signal · separated by comma, tab or semicolon</span>
-        </div>
-        <div id="pasteError" class="hint" style="color:var(--red); display:none;"></div>
-      </div>
-    </div>
-
-    <div class="btn-row">
-      <button class="btn-primary" id="computeBtn">Calculate calibration</button>
-      <button class="btn-ghost" id="saveCalBtn" style="display:none;">Save to history</button>
-      <span class="save-msg" id="saveMsg"></span>
-    </div>
-
-    <div id="regressionError" class="error-box" style="display:none;"></div>
-    <div id="blankWarningBox" class="warn-box" style="display:none;"></div>
-
-    <div class="panel-box" id="resultsBox" style="display:none;">
-      <div class="stats-grid" id="statsGrid"></div>
-      <div class="info-note" id="seNoteCalibration">
-        <b>About the ± values:</b> use the <b>"Uncertainty display"</b> switch above to choose between the raw <b>standard error</b> (~68% confidence) or a <b>95% confidence interval</b> (SE × Student's t, using n−2 degrees of freedom). Either way, it only reflects the scatter of the calibration points; it does not include volumetric, weighing, or instrument-drift uncertainty.
-      </div>
-      <svg class="chart" id="calChart" viewBox="0 0 600 260" preserveAspectRatio="xMidYMid meet"></svg>
+      <div id="batchResultsBox" style="margin-top:16px;"></div>
     </div>
   </div>
 
@@ -158,77 +206,102 @@
       With standard addition, concentration is calculated directly in the <b>Calibration</b> tab (it's the x-intercept of the series). This Samples tab is for external or internal-standard calibrations.
     </div>
 
-<div id="curveSamplesArea">
+    <div id="curveSamplesArea">
       <div class="field" style="margin-bottom:16px; max-width:340px;">
-        <label>Concentration method</label>
-        <div class="segmented" id="concMethodSeg">
-          <button class="active" data-val="curve">Calibration curve</button>
-          <button data-val="direct">Direct (Beer-Lambert)</button>
+        <label>Calibration mode</label>
+        <div class="segmented" id="sampleModeSeg">
+          <button class="active" data-val="single">Single analyte</button>
+          <button data-val="batch">Multi-analyte batch</button>
         </div>
       </div>
 
-      <div id="curveMethodArea">
-      <div class="field">
-        <label>Calibration to use</label>
-        <select id="calSelect"><option value="">— select —</option></select>
-      </div>
-
-      <div class="panel-box" id="activeCalInfo" style="display:none;"></div>
-
-      <div class="field" id="blankField" style="display:none;">
-        <label>Procedural / method blank (optional)</label>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <input id="blankSignalInput" placeholder="blank signal" inputmode="decimal" style="max-width:160px;">
-          <input id="blankSignalISInput" placeholder="blank IS signal" inputmode="decimal" style="max-width:160px; display:none;">
-          <span class="hint" id="blankResultLabel"></span>
-        </div>
-        <span class="hint">Subtracted from every sample's result below. Leave empty to skip blank correction.</span>
-      </div>
-
-<div id="samplesArea" style="display:none;">
-        <div class="info-note" style="margin-bottom:12px;">
-          Results are shown as <b>concentration ±</b> the uncertainty selected above (SE or 95% CI). With few calibration points, a 95% CI needs at least 3 points (n−2 &gt; 0) — with fewer, it will show as unavailable.
-        </div>
-        <div class="samples-head" id="samplesHead"></div>
-        <div id="samplesRows"></div>
-        <div class="btn-row" style="margin-top:10px;">
-          <button class="btn-ghost" id="addSampleBtn">+ Add sample</button>
-          <button class="btn-ghost" id="copySamplesBtn">Copy results table</button>
-        </div>
-      </div>
-      </div>
-
-      <div id="directMethodArea" style="display:none;">
-        <div class="info-note" style="margin-bottom:12px;">
-          Direct calculation from Beer-Lambert's law: <b>c = A / (ε × b)</b>. No calibration curve needed — but it assumes your molar absorptivity (ε) is accurate for your exact solvent, pH, and wavelength conditions. If unsure, the calibration-curve method is more robust.
-        </div>
-        <div class="row2">
-          <div class="field">
-            <label>Molar absorptivity ε (L·mol⁻¹·cm⁻¹)</label>
-            <input id="epsilonInput" placeholder="e.g. 15000" inputmode="decimal">
-          </div>
-          <div class="field">
-            <label>Path length b (cm)</label>
-            <input id="pathLengthInput" value="1" inputmode="decimal">
+      <div id="singleCalSamplesWrap">
+        <div class="field" style="margin-bottom:16px; max-width:340px;">
+          <label>Concentration method</label>
+          <div class="segmented" id="concMethodSeg">
+            <button class="active" data-val="curve">Calibration curve</button>
+            <button data-val="direct">Direct (Beer-Lambert)</button>
           </div>
         </div>
+
+        <div id="curveMethodArea">
+          <div class="field">
+            <label>Calibration to use</label>
+            <select id="calSelect"><option value="">— select —</option></select>
+          </div>
+
+          <div class="panel-box" id="activeCalInfo" style="display:none;"></div>
+
+          <div class="field" id="blankField" style="display:none;">
+            <label>Procedural / method blank (optional)</label>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <input id="blankSignalInput" placeholder="blank signal" inputmode="decimal" style="max-width:160px;">
+              <input id="blankSignalISInput" placeholder="blank IS signal" inputmode="decimal" style="max-width:160px; display:none;">
+              <span class="hint" id="blankResultLabel"></span>
+            </div>
+            <span class="hint">Subtracted from every sample's result below. Leave empty to skip blank correction.</span>
+          </div>
+
+          <div id="samplesArea" style="display:none;">
+            <div class="info-note" style="margin-bottom:12px;">
+              Results are shown as <b>concentration ±</b> the uncertainty selected above (SE or 95% CI). With few calibration points, a 95% CI needs at least 3 points (n−2 &gt; 0) — with fewer, it will show as unavailable.
+            </div>
+            <div class="samples-head" id="samplesHead"></div>
+            <div id="samplesRows"></div>
+            <div class="btn-row" style="margin-top:10px;">
+              <button class="btn-ghost" id="addSampleBtn">+ Add sample</button>
+              <button class="btn-ghost" id="copySamplesBtn">Copy results table</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="directMethodArea" style="display:none;">
+          <div class="info-note" style="margin-bottom:12px;">
+            Direct calculation from Beer-Lambert's law: <b>c = A / (ε × b)</b>. No calibration curve needed — but it assumes your molar absorptivity (ε) is accurate for your exact solvent, pH, and wavelength conditions. If unsure, the calibration-curve method is more robust.
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label>Molar absorptivity ε (L·mol⁻¹·cm⁻¹)</label>
+              <input id="epsilonInput" placeholder="e.g. 15000" inputmode="decimal">
+            </div>
+            <div class="field">
+              <label>Path length b (cm)</label>
+              <input id="pathLengthInput" value="1" inputmode="decimal">
+            </div>
+          </div>
+          <div class="field">
+            <label>Molar mass (g/mol) — optional, to also show mass concentration</label>
+            <input id="molarMassInput" placeholder="e.g. 342.3" inputmode="decimal" style="max-width:200px;">
+          </div>
+          <div class="samples-head" id="directSamplesHead" style="grid-template-columns:1.2fr 1fr 1fr 1fr 28px; margin-top:12px;">
+            <span>Sample</span><span>Absorbance</span><span>Dilution (e.g. 10, 5)</span><span>Result</span><span></span>
+          </div>
+          <div id="directSamplesRows"></div>
+          <div class="btn-row" style="margin-top:10px;">
+            <button class="btn-ghost" id="addDirectSampleBtn">+ Add sample</button>
+            <button class="btn-ghost" id="copyDirectSamplesBtn">Copy results table</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="batchSamplesArea" style="display:none;">
         <div class="field">
-          <label>Molar mass (g/mol) — optional, to also show mass concentration</label>
-          <input id="molarMassInput" placeholder="e.g. 342.3" inputmode="decimal" style="max-width:200px;">
+          <label>Batch to use</label>
+          <select id="batchSelect"><option value="">— select —</option></select>
         </div>
-        <div class="samples-head" id="directSamplesHead" style="grid-template-columns:1.2fr 1fr 1fr 1fr 28px; margin-top:12px;">
-          <span>Sample</span><span>Absorbance</span><span>Dilution (e.g. 10, 5)</span><span>Result</span><span></span>
-        </div>
-        <div id="directSamplesRows"></div>
-        <div class="btn-row" style="margin-top:10px;">
-          <button class="btn-ghost" id="addDirectSampleBtn">+ Add sample</button>
-          <button class="btn-ghost" id="copyDirectSamplesBtn">Copy results table</button>
+        <div id="batchSamplesTableWrap" style="display:none;">
+          <div id="batchSamplesHead" class="samples-head"></div>
+          <div id="batchSamplesRows"></div>
+          <div class="btn-row" style="margin-top:10px;">
+            <button class="btn-ghost" id="addBatchSampleBtn">+ Add sample</button>
+            <button class="btn-ghost" id="copyBatchSamplesBtn">Copy results table</button>
+          </div>
         </div>
       </div>
     </div>
 
     <div id="isotopeRatioArea" style="display:none;">
-            <div class="panel-box">
+      <div class="panel-box">
         <div class="panel-box-header"><span class="label">Replicate statistics</span></div>
         <div class="row2">
           <div class="field">

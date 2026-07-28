@@ -7,6 +7,7 @@ import { loadHistory, persistHistory } from "./storage.js";
 import { drawChart, drawSpectrumDivider } from "./chart.js";
 import { COLORS } from "./colors.js";
 import { TECHNIQUES, TECHNIQUE_ORDER, DEFAULT_TECHNIQUE } from "./techniques.js";
+import { initBatchModule } from "./batch.js";
 
 function applyTechniqueDefaults() {
   const t = TECHNIQUES[state.activeTechId];
@@ -1047,3 +1048,4 @@ renderTechniqueStrip();
 applyTechniqueDefaults();
 refreshCalSelect();
 updateSamplesModeVisibility();
+initBatchModule(() => state.activeTechId, () => document.getElementById("unitInput").value);

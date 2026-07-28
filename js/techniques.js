@@ -64,13 +64,15 @@ aas: {
     kind: "curve",
     notes: "Concentration by calibration curve (external / internal standard / standard addition) — same engine as ICP-MS, with absorbance as the signal instead of counts.",
   },
-    hplc: {
+hplc: {
     id: "hplc",
     label: "HPLC",
     fullName: "High-Performance Liquid Chromatography",
     defaultUnit: "mg/L",
     signalLabel: "peak area",
-    status: "coming-soon",
+    status: "available",
+    kind: "curve",
+    notes: "Concentration by calibration curve, single-analyte or multi-analyte batch (one calibration/regression per compound, from long-format analyte/conc/signal data). Peak areas are assumed already integrated by your chromatography software.",
   },
   gc: {
     id: "gc",
@@ -78,7 +80,9 @@ aas: {
     fullName: "Gas Chromatography",
     defaultUnit: "mg/L",
     signalLabel: "peak area",
-    status: "coming-soon",
+    status: "available",
+    kind: "curve",
+    notes: "Concentration by calibration curve, single-analyte or multi-analyte batch. Peak areas are assumed already integrated by your chromatography software.",
   },
   ic: {
     id: "ic",
@@ -86,7 +90,9 @@ aas: {
     fullName: "Ion Chromatography",
     defaultUnit: "mg/L",
     signalLabel: "peak area",
-    status: "coming-soon",
+    status: "available",
+    kind: "curve",
+    notes: "Concentration by calibration curve, single-analyte or multi-analyte batch. Peak areas are assumed already integrated by your chromatography software.",
   },
 };
 

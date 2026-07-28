@@ -24,3 +24,26 @@ export function persistHistory(savedCals) {
     return false;
   }
 }
+const BATCH_KEY = "icpms_batches_v1";
+
+/** Returns the saved multi-analyte batches array. */
+export function loadBatches() {
+  try {
+    const raw = localStorage.getItem(BATCH_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    console.warn("Could not read batches from localStorage:", e);
+    return [];
+  }
+}
+
+/** Persists the full batches array. */
+export function persistBatches(batches) {
+  try {
+    localStorage.setItem(BATCH_KEY, JSON.stringify(batches));
+    return true;
+  } catch (e) {
+    console.warn("Could not save batches to localStorage:", e);
+    return false;
+  }
+}
