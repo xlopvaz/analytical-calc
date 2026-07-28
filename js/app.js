@@ -2,7 +2,7 @@
 // Wires up the DOM: tabs, calibration form, samples table, history list.
 // Calculation logic lives in math.js, drawing in chart.js, persistence in storage.js —
 // this file is mostly event listeners and small render functions.
-import { linreg, fmt, parseDilutionChain, parseNum, parseCSV, concentrationSE, tValue95 } from "./math.js";
+import { linreg, fmt, parseDilutionChain, parseNum, parseCSV, concentrationSE, tValue95, meanSD } from "./math.js";
 import { loadHistory, persistHistory } from "./storage.js";
 import { drawChart, drawSpectrumDivider } from "./chart.js";
 import { COLORS } from "./colors.js";
@@ -16,15 +16,29 @@ function renderTechniqueStrip() {
   strip.innerHTML = "";
   TECHNIQUE_ORDER.forEach((id) => {
     const t = TECHNIQUES[id];
+    const isAvailable = t.status === "available";
+    const isSelected = id === state.activeTechId;
     const pill = el("span", {
-      class: "tech-pill " + (t.status === "available" ? "available" : "soon"),
+      class: "tech-pill " + (isAvailable ? "available" : "soon") + (isSelected ? " selected" : ""),
       text: t.label,
     });
-    pill.title = t.status === "available" ? t.fullName : t.fullName + " — coming soon";
+    pill.title = isAvailable ? t.fullName : t.fullName + " — coming soon";
+    if (isAvailable) {
+      pill.addEventListener("click", () => {
+        state.activeTechId = id;
+        renderTechniqueStrip();
+        updateSamplesModeVisibility();
+      });
+    }
     strip.appendChild(pill);
   });
 }
-renderTechniqueStrip();
+
+function updateSamplesModeVisibility() {
+  const kind = TECHNIQUES[state.activeTechId].kind;
+  document.getElementById("curveSamplesArea").style.display = kind === "curve" ? "block" : "none";
+  document.getElementById("isotopeRatioArea").style.display = kind === "isotope-ratio" ? "block" : "none";
+}
 let idCounter = 1;
 const newId = () => "id_" + Date.now() + "_" + idCounter++;
 
@@ -59,6 +73,8 @@ const state = {
   activeCal: null, // { analyte, unit, calType, regression }
   savedCals: [],
   uncertaintyMode: "se", // "se" | "ci95"
+  activeTechId: DEFAULT_TECHNIQUE, // which pill is selected — controls what shows in the Samples tab
+  ssbRows: [], // { id, label, type: "standard"|"sample", ratio }
 };
 
 // Multiplies a standard error into the currently selected display mode.
@@ -716,8 +732,160 @@ document.getElementById("copySamplesBtn").addEventListener("click", () => {
   }
 });
 
+// ---------- isotope ratio tools (MC-ICP-MS): replicate stats + SSB ----------
+document.getElementById("repTypeSeg").addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  document.querySelectorAll("#repTypeSeg button").forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+});
+
+let lastRepStats = null;
+
+document.getElementById("computeRepBtn").addEventListener("click", () => {
+  const raw = document.getElementById("repValuesInput").value;
+  const values = raw
+    .split(/[\n,\t;]+/)
+    .map((s) => parseNum(s.trim()))
+    .filter((n) => !Number.isNaN(n));
+  const box = document.getElementById("repStatsOutput");
+  box.innerHTML = "";
+  const addBtn = document.getElementById("addToSequenceBtn");
+  if (values.length < 2) {
+    box.appendChild(el("span", { class: "empty-note", text: "Enter at least 2 replicate values." }));
+    addBtn.style.display = "none";
+    lastRepStats = null;
+    return;
+  }
+  const stats = meanSD(values);
+  lastRepStats = stats;
+  box.appendChild(statBlock("N", stats.n));
+  box.appendChild(statBlock("Mean", fmt(stats.mean, 6)));
+  box.appendChild(statBlock("2SD", fmt(stats.twoSD, 4)));
+  box.appendChild(statBlock("RSD", stats.rsd !== null ? fmt(stats.rsd, 3) : "—", "%"));
+  addBtn.style.display = "inline-block";
+});
+
+document.getElementById("addToSequenceBtn").addEventListener("click", () => {
+  if (!lastRepStats) return;
+  const label = document.getElementById("repLabelInput").value || "(unnamed)";
+  const type = document.querySelector("#repTypeSeg button.active").dataset.val;
+  addSsbRow({ label, type, ratio: lastRepStats.mean });
+});
+
+function addSsbRow(data) {
+  const rowData = Object.assign({ id: newId(), label: "", type: "sample", ratio: "" }, data || {});
+  state.ssbRows.push(rowData);
+  renderSsbRows();
+}
+
+function renderSsbRows() {
+  const container = document.getElementById("ssbRows");
+  container.innerHTML = "";
+  state.ssbRows.forEach((rowData, idx) => {
+    const row = el("div", { class: "samples-row" });
+    row.style.display = "grid";
+    row.style.gridTemplateColumns = "28px 1.4fr 1fr 1fr 28px";
+    row.style.gap = "8px";
+    row.style.alignItems = "center";
+    row.style.marginTop = "8px";
+
+    row.appendChild(el("span", { class: "hint", text: String(idx + 1) }));
+
+    const labelInput = el("input", { placeholder: "label" });
+    labelInput.value = rowData.label;
+    labelInput.addEventListener("input", () => (rowData.label = labelInput.value));
+    row.appendChild(labelInput);
+
+    const typeSelect = el("select", {});
+    ["standard", "sample"].forEach((v) => {
+      const opt = el("option", { value: v, text: v === "standard" ? "Standard" : "Sample" });
+      if (rowData.type === v) opt.setAttribute("selected", "selected");
+      typeSelect.appendChild(opt);
+    });
+    typeSelect.addEventListener("change", () => (rowData.type = typeSelect.value));
+    row.appendChild(typeSelect);
+
+    const ratioInput = el("input", { placeholder: "0", inputmode: "decimal" });
+    ratioInput.value = rowData.ratio;
+    ratioInput.addEventListener("input", () => (rowData.ratio = ratioInput.value));
+    row.appendChild(ratioInput);
+
+    const rmBtn = el("button", {
+      class: "remove-btn",
+      text: "×",
+      onclick: () => {
+        state.ssbRows = state.ssbRows.filter((r) => r.id !== rowData.id);
+        renderSsbRows();
+      },
+    });
+    row.appendChild(rmBtn);
+
+    container.appendChild(row);
+  });
+}
+
+document.getElementById("addSsbRowBtn").addEventListener("click", () => addSsbRow());
+
+document.getElementById("computeSsbBtn").addEventListener("click", () => {
+  const certified = parseNum(document.getElementById("certifiedValueInput").value);
+  const resultsBox = document.getElementById("ssbResults");
+  resultsBox.innerHTML = "";
+  if (Number.isNaN(certified)) {
+    resultsBox.appendChild(el("span", { class: "empty-note", text: "Enter the certified reference value first." }));
+    return;
+  }
+  const rows = state.ssbRows.map((r) => ({ ...r, ratio: parseNum(r.ratio) })).filter((r) => !Number.isNaN(r.ratio));
+  if (rows.length === 0) {
+    resultsBox.appendChild(el("span", { class: "empty-note", text: "Add at least one row to the sequence." }));
+    return;
+  }
+
+  rows.forEach((r, i) => {
+    const line = el("div", { class: "hist-item" });
+    const left = el("div");
+    left.appendChild(el("span", { class: "name", text: `${r.label} · ${r.type}` }));
+
+    if (r.type === "standard") {
+      const dev = ((r.ratio - certified) / certified) * 100;
+      left.appendChild(el("span", { class: "meta", text: `raw = ${fmt(r.ratio, 6)} · deviation from certified = ${fmt(dev, 3)}%` }));
+    } else {
+      // find nearest standard before and after this row in the sequence
+      let before = null, after = null;
+      for (let j = i - 1; j >= 0; j--) if (rows[j].type === "standard") { before = rows[j]; break; }
+      for (let j = i + 1; j < rows.length; j++) if (rows[j].type === "standard") { after = rows[j]; break; }
+
+      if (before && after) {
+        const bracketAvg = (before.ratio + after.ratio) / 2;
+        const corrected = r.ratio * (certified / bracketAvg);
+        left.appendChild(
+          el("span", {
+            class: "meta",
+            text: `raw = ${fmt(r.ratio, 6)} · bracket avg = ${fmt(bracketAvg, 6)} · corrected = ${fmt(corrected, 6)}`,
+          })
+        );
+      } else if (before || after) {
+        const single = before || after;
+        const corrected = r.ratio * (certified / single.ratio);
+        left.appendChild(
+          el("span", {
+            class: "meta",
+            text: `raw = ${fmt(r.ratio, 6)} · only one bracketing standard found (${single.label}) · corrected = ${fmt(corrected, 6)} ⚠`,
+          })
+        );
+      } else {
+        left.appendChild(el("span", { class: "meta", text: `raw = ${fmt(r.ratio, 6)} · no bracketing standards found — cannot correct ⚠` }));
+      }
+    }
+    line.appendChild(left);
+    resultsBox.appendChild(line);
+  });
+});
+
 // ---------- init ----------
 state.savedCals = loadHistory();
 updateHistCount();
 resetPointsTable();
 refreshCalSelect();
+renderTechniqueStrip();
+updateSamplesModeVisibility();

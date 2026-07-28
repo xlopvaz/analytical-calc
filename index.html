@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Analytical Concentration Calculator</title><link rel="stylesheet" href="css/styles.css">
+<title>Analytical Concentration Calculator</title>
+<link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 <div class="wrap">
-  <div>
-<div class="header-row">
+
+  <div class="header-row">
     <svg class="atom-icon" width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
       <ellipse cx="20" cy="20" rx="17" ry="7" stroke="#9D5CFF" stroke-width="1.6" fill="none" transform="rotate(0 20 20)"/>
       <ellipse cx="20" cy="20" rx="17" ry="7" stroke="#9D5CFF" stroke-width="1.6" fill="none" transform="rotate(60 20 20)"/>
@@ -23,9 +24,10 @@
       <p class="subtitle">From instrument signal to concentration — calibration, dilution, LOD/LOQ, uncertainty.</p>
     </div>
   </div>
+
   <div class="divider"><svg width="100%" height="34" viewBox="0 0 400 34" preserveAspectRatio="none"></svg></div>
 
-<div class="tech-strip" id="techStrip"></div>
+  <div class="tech-strip" id="techStrip"></div>
 
   <div class="field" style="margin-bottom:16px; max-width:300px;">
     <label>Uncertainty display</label>
@@ -44,10 +46,12 @@
       <li>Optionally <b>save the calibration to History</b> so you can reuse it without re-entering points.</li>
       <li>Go to the <b>Samples</b> tab, pick the calibration to use, and enter each sample's signal plus any dilution factors to get its concentration.</li>
       <li>Optionally enter a <b>procedural/method blank</b> signal in the Samples tab — it's automatically subtracted from every sample's result in that batch.</li>
+      <li>For <b>MC-ICP-MS</b>, select that pill above the tabs to switch the Samples tab to replicate statistics and sample-standard bracketing (SSB) instead.</li>
     </ol>
   </details>
 
-  <div class="tabs">    <button class="tab-btn active" data-tab="calibration">Calibration</button>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="calibration">Calibration</button>
     <button class="tab-btn" data-tab="samples">Samples</button>
     <button class="tab-btn" data-tab="history">History <span id="histCount"></span></button>
   </div>
@@ -113,15 +117,15 @@
       <span class="save-msg" id="saveMsg"></span>
     </div>
 
-<div id="regressionError" class="error-box" style="display:none;"></div>
+    <div id="regressionError" class="error-box" style="display:none;"></div>
     <div id="blankWarningBox" class="warn-box" style="display:none;"></div>
 
-<div class="panel-box" id="resultsBox" style="display:none;">
+    <div class="panel-box" id="resultsBox" style="display:none;">
       <div class="stats-grid" id="statsGrid"></div>
-<div class="info-note" id="seNoteCalibration">
+      <div class="info-note" id="seNoteCalibration">
         <b>About the ± values:</b> use the <b>"Uncertainty display"</b> switch above to choose between the raw <b>standard error</b> (~68% confidence) or a <b>95% confidence interval</b> (SE × Student's t, using n−2 degrees of freedom). Either way, it only reflects the scatter of the calibration points; it does not include volumetric, weighing, or instrument-drift uncertainty.
       </div>
-          <svg class="chart" id="calChart" viewBox="0 0 600 260" preserveAspectRatio="xMidYMid meet"></svg>
+      <svg class="chart" id="calChart" viewBox="0 0 600 260" preserveAspectRatio="xMidYMid meet"></svg>
     </div>
   </div>
 
@@ -130,50 +134,99 @@
     <div class="info-note" id="additionNote" style="display:none;">
       With standard addition, concentration is calculated directly in the <b>Calibration</b> tab (it's the x-intercept of the series). This Samples tab is for external or internal-standard calibrations.
     </div>
-<div class="field">
-      <label>Calibration to use</label>
-      <select id="calSelect"><option value="">— select —</option></select>
+
+    <div id="curveSamplesArea">
+      <div class="field">
+        <label>Calibration to use</label>
+        <select id="calSelect"><option value="">— select —</option></select>
+      </div>
+
+      <div class="panel-box" id="activeCalInfo" style="display:none;"></div>
+
+      <div class="field" id="blankField" style="display:none;">
+        <label>Procedural / method blank (optional)</label>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <input id="blankSignalInput" placeholder="blank signal" inputmode="decimal" style="max-width:160px;">
+          <input id="blankSignalISInput" placeholder="blank IS signal" inputmode="decimal" style="max-width:160px; display:none;">
+          <span class="hint" id="blankResultLabel"></span>
+        </div>
+        <span class="hint">Subtracted from every sample's result below. Leave empty to skip blank correction.</span>
+      </div>
+
+      <div id="samplesArea" style="display:none;">
+        <div class="info-note" style="margin-bottom:12px;">
+          Results are shown as <b>concentration ±</b> the uncertainty selected above (SE or 95% CI). With few calibration points, a 95% CI needs at least 3 points (n−2 &gt; 0) — with fewer, it will show as unavailable.
+        </div>
+        <div class="samples-head" id="samplesHead"></div>
+        <div id="samplesRows"></div>
+        <div class="btn-row" style="margin-top:10px;">
+          <button class="btn-ghost" id="addSampleBtn">+ Add sample</button>
+          <button class="btn-ghost" id="copySamplesBtn">Copy results table</button>
+        </div>
+      </div>
     </div>
 
-<div class="panel-box" id="activeCalInfo" style="display:none;"></div>
+    <div id="isotopeRatioArea" style="display:none;">
+      <div class="panel-box">
+        <div class="panel-box-header"><span class="label">Replicate statistics</span></div>
+        <div class="row2">
+          <div class="field">
+            <label>Label (e.g. Sample 3, SRM987 #2)</label>
+            <input id="repLabelInput" placeholder="e.g. Sample 3">
+          </div>
+          <div class="field">
+            <label>Type</label>
+            <div class="segmented" id="repTypeSeg">
+              <button class="active" data-val="sample">Sample</button>
+              <button data-val="standard">Standard</button>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Replicate ratio values (one per line, or comma/tab separated)</label>
+          <textarea id="repValuesInput" placeholder="0.72591&#10;0.72588&#10;0.72593"></textarea>
+        </div>
+        <div class="btn-row">
+          <button class="btn-ghost" id="computeRepBtn">Calculate stats</button>
+        </div>
+        <div id="repStatsOutput" class="stats-grid" style="margin-top:12px;"></div>
+        <div class="btn-row" style="margin-top:12px;">
+          <button class="btn-primary" id="addToSequenceBtn" style="display:none;">Add to SSB sequence</button>
+        </div>
+      </div>
 
-    <div class="field" id="blankField" style="display:none;"><div class="panel-box" id="resultsBox" style="display:none;">
-      <div class="stats-grid" id="statsGrid"></div>
-      <div class="info-note" id="seNoteCalibration">
-        <b>About "SE":</b> the ± values above (SE slope, SE intercept, and sample concentration ±) are the <b>standard error</b> from the calibration curve — roughly a 68% confidence range, not the 95% confidence interval usually reported in papers. It only reflects the scatter of the calibration points; it does not include volumetric, weighing, or instrument-drift uncertainty.
-      </div>
-      <svg class="chart" id="calChart" viewBox="0 0 600 260" preserveAspectRatio="xMidYMid meet"></svg>
-    </div>      <label>Procedural / method blank (optional)</label>
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <input id="blankSignalInput" placeholder="blank signal" inputmode="decimal" style="max-width:160px;">
-        <input id="blankSignalISInput" placeholder="blank IS signal" inputmode="decimal" style="max-width:160px; display:none;">
-        <span class="hint" id="blankResultLabel"></span>
-      </div>
-      <span class="hint">Subtracted from every sample's result below. Leave empty to skip blank correction.</span>
-    </div>
-
-<div id="samplesArea" style="display:none;">
-<div class="info-note" style="margin-bottom:12px;">
-        Results are shown as <b>concentration ±</b> the uncertainty selected above (SE or 95% CI). With few calibration points, a 95% CI needs at least 3 points (n−2 &gt; 0) — with fewer, it will show as unavailable.
-      </div>
-          <div class="samples-head" id="samplesHead"></div>
-      <div id="samplesRows"></div>
-      <div class="btn-row" style="margin-top:10px;">
-        <button class="btn-ghost" id="addSampleBtn">+ Add sample</button>
-        <button class="btn-ghost" id="copySamplesBtn">Copy results table</button>
+      <div class="panel-box">
+        <div class="panel-box-header"><span class="label">Sample-standard bracketing (SSB)</span></div>
+        <div class="field" style="max-width:260px;">
+          <label>Certified reference value</label>
+          <input id="certifiedValueInput" placeholder="e.g. 0.71034" inputmode="decimal">
+        </div>
+        <div class="points-head" id="ssbHead" style="grid-template-columns:28px 1.4fr 1fr 1fr 28px; margin-top:12px;">
+          <span>#</span><span>Label</span><span>Type</span><span>Ratio (mean)</span><span></span>
+        </div>
+        <div id="ssbRows"></div>
+        <button class="btn-ghost" id="addSsbRowBtn" style="margin-top:8px; padding:6px 12px; font-size:12px;">+ Add row manually</button>
+        <div class="btn-row" style="margin-top:12px;">
+          <button class="btn-primary" id="computeSsbBtn">Calculate SSB correction</button>
+        </div>
+        <div id="ssbResults" style="margin-top:12px;"></div>
+        <div class="info-note" style="margin-top:12px;">
+          Uses the simplified averaged-bracket formula: <b>corrected = measured × (certified / average of the two bracketing standards)</b>. Rows are treated in the order listed — arrange them as Standard → Sample → Standard → Sample... This is the common simplified version of SSB from the literature, not necessarily identical to any specific script your supervisor may have used — verify against known results before trusting it.
+        </div>
       </div>
     </div>
-    </div>
+  </div>
 
   <!-- HISTORY TAB -->
   <div class="tab-panel" id="panel-history">
     <div id="historyList"></div>
   </div>
 
-<div class="footer-note">
+  <div class="footer-note">
     Personal calculation tool — always double-check results against your own analytical judgment. LOD/LOQ estimated as 3.3·Sy/x/m and 10·Sy/x/m. Calibrations are saved locally in this browser (localStorage).
     <div class="footer-author">Xoel López Vázquez · Chemist, University of Vigo</div>
   </div>
+
 </div>
 
 <script type="module" src="js/app.js"></script>

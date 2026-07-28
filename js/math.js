@@ -113,3 +113,14 @@ export function tValue95(df) {
   if (df >= 30) return 1.96;
   return T95_TABLE[Math.round(df)] ?? 1.96;
 }
+/** Mean, sample standard deviation, 2SD, and %RSD for a set of replicate measurements. */
+export function meanSD(values) {
+  const n = values.length;
+  if (n === 0) return null;
+  const mean = values.reduce((a, b) => a + b, 0) / n;
+  if (n === 1) return { mean, sd: 0, twoSD: 0, rsd: null, n };
+  const variance = values.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1);
+  const sd = Math.sqrt(variance);
+  const rsd = mean !== 0 ? (sd / Math.abs(mean)) * 100 : null;
+  return { mean, sd, twoSD: 2 * sd, rsd, n };
+}

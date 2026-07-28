@@ -19,10 +19,22 @@ export const TECHNIQUES = {
     defaultUnit: "µg/L",
     signalLabel: "signal (cps)",
     status: "available",
+    kind: "curve",
     notes:
       "Concentration by calibration curve — applies the same way whether the instrument is quadrupole, TOF, or sector-field/MC. Isotope-ratio measurements are a separate calculation, not covered here.",
   },
-  icpoes: {
+  mcicpms: {
+    id: "mcicpms",
+    label: "MC-ICP-MS",
+    fullName: "Multi-Collector ICP-MS (isotope ratios)",
+    defaultUnit: "",
+    signalLabel: "isotope ratio",
+    status: "available",
+    kind: "isotope-ratio",
+    notes:
+      "Isotope-ratio precision (replicate statistics) and sample-standard bracketing (SSB) correction against a certified reference material. Not a calibration-curve concentration method — lives in its own section of the Samples tab.",
+  },
+    icpoes: {
     id: "icpoes",
     label: "ICP-OES",
     fullName: "ICP Optical Emission Spectrometry",
@@ -73,6 +85,5 @@ export const TECHNIQUES = {
 };
 
 // Controls the display order of the technique strip in the UI.
-export const TECHNIQUE_ORDER = ["icpms", "icpoes", "aas", "uvvis", "hplc", "gc", "ic"];
-
+export const TECHNIQUE_ORDER = ["icpms", "mcicpms", "icpoes", "aas", "uvvis", "hplc", "gc", "ic"];
 export const DEFAULT_TECHNIQUE = "icpms";
