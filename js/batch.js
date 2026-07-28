@@ -14,7 +14,7 @@
 // they can be ported here later if needed.
 
 import { linreg, fmt, parseNum, parseDilutionChain, concentrationSE } from "./math.js";
-import { loadBatches, persistBatches } from "./storage.js";
+import { loadBatches, persistBatches, loadSampleRuns, persistSampleRuns } from "./storage.js";
 
 function el(tag, attrs, children) {
   const e = document.createElement(tag);
@@ -332,13 +332,37 @@ wrapper.appendChild(row);
     wrapper.recompute = recomputeRow;
     return wrapper;
   }
-  
-  document.getElementById("addBatchSampleBtn").addEventListener("click", () => {
+
+function addBatchSampleRow(prefill) {
     if (!state.activeBatch) return;
-    const rowData = { id: newId(), name: "", values: {} };
+    const rowData = Object.assign(
+      { id: newId(), name: "", values: {} },
+      prefill ? { name: prefill.name, values: JSON.parse(JSON.stringify(prefill.values || {})) } : {}
+    );
     state.sampleRows.push(rowData);
     const names = Object.keys(state.activeBatch.analytes);
     document.getElementById("batchSamplesRows").appendChild(buildBatchSampleRow(rowData, names));
+  }
+  document.getElementById("addBatchSampleBtn").addEventListener("click", () => addBatchSampleRow());
+
+  document.getElementById("saveBatchRunBtn").addEventListener("click", () => {
+    if (!state.activeBatch || state.sampleRows.length === 0) return;
+    const name = document.getElementById("batchRunNameInput").value || `Batch run ${new Date().toLocaleString()}`;
+    const runs = loadSampleRuns();
+    const record = {
+      key: newId(),
+      technique: getActiveTechId(),
+      kind: "batch",
+      name,
+      batchSnapshot: state.activeBatch,
+      samples: state.sampleRows.map((r) => ({ name: r.name, values: JSON.parse(JSON.stringify(r.values)) })),
+      savedAt: Date.now(),
+    };
+    runs.unshift(record);
+    persistSampleRuns(runs);
+    const msg = document.getElementById("batchRunSaveMsg");
+    msg.textContent = "Results saved.";
+    setTimeout(() => (msg.textContent = ""), 2500);
   });
 
   document.getElementById("copyBatchSamplesBtn").addEventListener("click", () => {
@@ -362,4 +386,17 @@ wrapper.appendChild(row);
   });
 
   refreshBatchSelect();
+
+  return {
+    loadRun(run) {
+      document.querySelector('.tab-btn[data-tab="samples"]').click();
+      document.getElementById("sampleModeSeg").querySelector('[data-val="batch"]').click();
+      document.getElementById("batchSelect").value = "";
+      state.activeBatch = run.batchSnapshot;
+      renderBatchSampleTable();
+      state.sampleRows = [];
+      document.getElementById("batchSamplesRows").innerHTML = "";
+      (run.samples || []).forEach((s) => addBatchSampleRow(s));
+    },
+  };
 }

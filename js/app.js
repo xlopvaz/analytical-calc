@@ -3,7 +3,7 @@
 // Calculation logic lives in math.js, drawing in chart.js, persistence in storage.js —
 // this file is mostly event listeners and small render functions.
 import { linreg, fmt, parseDilutionChain, parseNum, parseCSV, concentrationSE, tValue95, meanSD } from "./math.js";
-import { loadHistory, persistHistory } from "./storage.js";
+import { loadHistory, persistHistory, loadSampleRuns, persistSampleRuns } from "./storage.js";
 import { drawChart, drawSpectrumDivider } from "./chart.js";
 import { COLORS } from "./colors.js";
 import { TECHNIQUES, TECHNIQUE_ORDER, DEFAULT_TECHNIQUE } from "./techniques.js";
@@ -81,9 +81,12 @@ const state = {
   activeCal: null, // { analyte, unit, calType, regression }
   savedCals: [],
   uncertaintyMode: "se", // "se" | "ci95"
-  activeTechId: DEFAULT_TECHNIQUE, // which pill is selected — controls what shows in the Samples tab
+activeTechId: DEFAULT_TECHNIQUE, // which pill is selected — controls what shows in the Samples tab
   ssbRows: [], // { id, label, type: "standard"|"sample", ratio }
+  sampleRuns: [], // saved sample-result runs (single-analyte and batch)
 };
+
+let batchApi; // assigned once initBatchModule() runs — used to load saved batch runs from History
 
 // Multiplies a standard error into the currently selected display mode.
 // Returns null when a 95% CI was requested but there aren't enough
@@ -226,7 +229,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
     btn.classList.add("active");
     document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
-    if (btn.dataset.tab === "history") renderHistory();
+if (btn.dataset.tab === "history") { renderHistory(); renderSampleRuns(); }
     if (btn.dataset.tab === "samples") refreshCalSelect();
   });
 });
@@ -658,18 +661,22 @@ document.getElementById("calSelect").addEventListener("change", onCalSelectChang
 function onCalSelectChange() {
   const val = document.getElementById("calSelect").value;
   if (val === "") {
-    state.activeCal = null;
+    activateCal(null);
   } else if (val === "current") {
-    state.activeCal = {
+    activateCal({
       analyte: document.getElementById("analyteInput").value,
       unit: document.getElementById("unitInput").value,
       calType: state.calType,
       regression: state.regression,
-    };
+    });
   } else {
     const found = state.savedCals.find((c) => c.key === val);
-    state.activeCal = found ? { analyte: found.analyte, unit: found.unit, calType: found.calType, regression: found.regression } : null;
+    activateCal(found ? { analyte: found.analyte, unit: found.unit, calType: found.calType, regression: found.regression } : null);
   }
+}
+
+function activateCal(calObj) {
+  state.activeCal = calObj;
   document.getElementById("samplesArea").style.display = state.activeCal ? "block" : "none";
   document.getElementById("blankField").style.display = state.activeCal ? "flex" : "none";
   document.getElementById("blankSignalISInput").style.display =
@@ -753,22 +760,24 @@ function buildSamplesHead() {
     "<span>Dilution (e.g. 10, 5)</span><span>Result</span><span></span>";
 }
 
-function addSampleRow() {
+function addSampleRow(prefill) {
   if (!state.activeCal) return;
   const isInternal = state.activeCal.calType === "internal";
-  const data = { name: "", signal: "", signalIS: "", dilution: "" };
-  const row = el("div", { class: "samples-row" });
+  const data = Object.assign({ name: "", signal: "", signalIS: "", dilution: "" }, prefill || {});
+    const row = el("div", { class: "samples-row" });
   row.style.display = "grid";
   row.style.gridTemplateColumns = isInternal ? "1.2fr 1fr 1fr 1fr 1fr 28px" : "1.2fr 1fr 1fr 1fr 28px";
   row.style.gap = "8px";
   row.style.alignItems = "center";
   row.style.marginTop = "8px";
 
-  const nameInput = el("input", { placeholder: "sample ID" });
+const nameInput = el("input", { placeholder: "sample ID" });
+  nameInput.value = data.name;
   nameInput.addEventListener("input", () => (data.name = nameInput.value));
   row.appendChild(nameInput);
 
   const sigInput = el("input", { placeholder: "0", inputmode: "decimal" });
+  sigInput.value = data.signal;
   sigInput.addEventListener("input", () => {
     data.signal = sigInput.value;
     recompute();
@@ -777,6 +786,7 @@ function addSampleRow() {
 
   if (isInternal) {
     const isInput = el("input", { placeholder: "0", inputmode: "decimal" });
+    isInput.value = data.signalIS;
     isInput.addEventListener("input", () => {
       data.signalIS = isInput.value;
       recompute();
@@ -785,6 +795,7 @@ function addSampleRow() {
   }
 
   const dilInput = el("input", { placeholder: "1" });
+  dilInput.value = data.dilution;
   dilInput.addEventListener("input", () => {
     data.dilution = dilInput.value;
     recompute();
@@ -867,13 +878,14 @@ const dil = parseDilutionChain(data.dilution);
       ? "Not enough calibration points to compute a 95% CI (need n > 2)."
       : "Uncertainty unavailable — this calibration was saved before SE tracking was added. Recalculate and re-save it in the Calibration tab to get ±.");
   }
-          row.recompute = recompute;
+row.recompute = recompute;
+  recompute();
 
   state.samples.push(data);
   document.getElementById("samplesRows").appendChild(row);
 }
 
-document.getElementById("addSampleBtn").addEventListener("click", addSampleRow);
+document.getElementById("addSampleBtn").addEventListener("click", () => addSampleRow());
 
 document.getElementById("copySamplesBtn").addEventListener("click", () => {
   if (!state.activeCal) return;
@@ -891,6 +903,91 @@ document.getElementById("copySamplesBtn").addEventListener("click", () => {
     navigator.clipboard.writeText(text).catch(() => {});
   }
 });
+
+// ---------- saved sample runs (single-analyte) ----------
+document.getElementById("saveSampleRunBtn").addEventListener("click", () => {
+  if (!state.activeCal || state.samples.length === 0) return;
+  const name = document.getElementById("sampleRunNameInput").value || `Run ${new Date().toLocaleString()}`;
+  const record = {
+    key: newId(),
+    technique: state.activeTechId,
+    kind: "single",
+    name,
+    calSnapshot: state.activeCal,
+    blankSignal: document.getElementById("blankSignalInput").value,
+    blankSignalIS: document.getElementById("blankSignalISInput").value,
+    samples: state.samples.map((s) => ({ ...s })),
+    savedAt: Date.now(),
+  };
+  state.sampleRuns.unshift(record);
+  persistSampleRuns(state.sampleRuns);
+  const msg = document.getElementById("sampleRunSaveMsg");
+  msg.textContent = "Results saved.";
+  setTimeout(() => (msg.textContent = ""), 2500);
+  renderSampleRuns();
+});
+
+function loadSingleSampleRun(run) {
+  document.querySelector('.tab-btn[data-tab="samples"]').click();
+  document.getElementById("sampleModeSeg")?.querySelector('[data-val="single"]')?.click();
+  document.getElementById("concMethodSeg")?.querySelector('[data-val="curve"]')?.click();
+  document.getElementById("calSelect").value = "";
+  activateCal(run.calSnapshot);
+  document.getElementById("blankSignalInput").value = run.blankSignal || "";
+  document.getElementById("blankSignalISInput").value = run.blankSignalIS || "";
+  state.samples = [];
+  document.getElementById("samplesRows").innerHTML = "";
+  (run.samples || []).forEach((s) => addSampleRow(s));
+  updateBlankDisplay();
+}
+
+function renderSampleRuns() {
+  const list = document.getElementById("sampleRunsList");
+  list.innerHTML = "";
+  if (state.sampleRuns.length === 0) {
+    list.appendChild(el("span", { class: "empty-note", text: 'No saved sample results yet. Use "Save results" in the Samples tab.' }));
+    return;
+  }
+  state.sampleRuns.forEach((run) => {
+    const item = el("div", { class: "hist-item" });
+    const left = el("div");
+    const techLabel = TECHNIQUES[run.technique] ? TECHNIQUES[run.technique].label : run.technique;
+    left.appendChild(el("span", { class: "name", text: run.name }));
+    left.appendChild(
+      el("span", {
+        class: "meta",
+        text: `${techLabel} · ${run.kind === "batch" ? "multi-analyte batch" : "single analyte"} · ${(run.samples || []).length} samples`,
+      })
+    );
+    left.appendChild(el("span", { class: "date", text: new Date(run.savedAt).toLocaleString() }));
+    item.appendChild(left);
+
+    const actions = el("div", { class: "hist-actions" });
+    actions.appendChild(
+      el("button", {
+        class: "btn-ghost",
+        text: "Load",
+        onclick: () => {
+          if (run.kind === "batch") batchApi.loadRun(run);
+          else loadSingleSampleRun(run);
+        },
+      })
+    );
+    actions.appendChild(
+      el("button", {
+        class: "btn-ghost danger",
+        text: "Delete",
+        onclick: () => {
+          state.sampleRuns = state.sampleRuns.filter((r) => r.key !== run.key);
+          persistSampleRuns(state.sampleRuns);
+          renderSampleRuns();
+        },
+      })
+    );
+    item.appendChild(actions);
+    list.appendChild(item);
+  });
+}
 
 // ---------- isotope ratio tools (MC-ICP-MS): replicate stats + SSB ----------
 document.getElementById("repTypeSeg").addEventListener("click", (e) => {
@@ -1059,11 +1156,12 @@ document.getElementById("computeSsbBtn").addEventListener("click", () => {
 
 // ---------- init ----------
 state.savedCals = loadHistory();
+state.sampleRuns = loadSampleRuns();
 updateHistCount();
 resetPointsTable();
 renderTechniqueStrip();
 applyTechniqueDefaults();
 refreshCalSelect();
 updateSamplesModeVisibility();
-initBatchModule(() => state.activeTechId, () => document.getElementById("unitInput").value, ciFactor);
+batchApi = initBatchModule(() => state.activeTechId, () => document.getElementById("unitInput").value, ciFactor);
 initDataTransfer();

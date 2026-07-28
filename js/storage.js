@@ -47,3 +47,26 @@ export function persistBatches(batches) {
     return false;
   }
 }
+const RUNS_KEY = "icpms_sample_runs_v1";
+
+/** Returns saved sample-result runs (both single-analyte and batch). */
+export function loadSampleRuns() {
+  try {
+    const raw = localStorage.getItem(RUNS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    console.warn("Could not read sample runs from localStorage:", e);
+    return [];
+  }
+}
+
+/** Persists the full sample runs array. */
+export function persistSampleRuns(runs) {
+  try {
+    localStorage.setItem(RUNS_KEY, JSON.stringify(runs));
+    return true;
+  } catch (e) {
+    console.warn("Could not save sample runs to localStorage:", e);
+    return false;
+  }
+}

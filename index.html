@@ -242,7 +242,7 @@
             <span class="hint">Subtracted from every sample's result below. Leave empty to skip blank correction.</span>
           </div>
 
-          <div id="samplesArea" style="display:none;">
+<div id="samplesArea" style="display:none;">
             <div class="info-note" style="margin-bottom:12px;">
               Results are shown as <b>concentration ±</b> the uncertainty selected above (SE or 95% CI). With few calibration points, a 95% CI needs at least 3 points (n−2 &gt; 0) — with fewer, it will show as unavailable.
             </div>
@@ -252,8 +252,16 @@
               <button class="btn-ghost" id="addSampleBtn">+ Add sample</button>
               <button class="btn-ghost" id="copySamplesBtn">Copy results table</button>
             </div>
+            <div class="row2" style="margin-top:14px; align-items:flex-end;">
+              <div class="field">
+                <label>Run name (optional)</label>
+                <input id="sampleRunNameInput" placeholder="e.g. Site visit 2026-07-28">
+              </div>
+              <button class="btn-primary" id="saveSampleRunBtn">Save results</button>
+            </div>
+            <span class="save-msg" id="sampleRunSaveMsg"></span>
           </div>
-        </div>
+              </div>
 
         <div id="directMethodArea" style="display:none;">
           <div class="info-note" style="margin-bottom:12px;">
@@ -289,15 +297,23 @@
           <label>Batch to use</label>
           <select id="batchSelect"><option value="">— select —</option></select>
         </div>
-        <div id="batchSamplesTableWrap" style="display:none;">
+<div id="batchSamplesTableWrap" style="display:none;">
           <div id="batchSamplesHead" class="samples-head"></div>
           <div id="batchSamplesRows"></div>
           <div class="btn-row" style="margin-top:10px;">
             <button class="btn-ghost" id="addBatchSampleBtn">+ Add sample</button>
             <button class="btn-ghost" id="copyBatchSamplesBtn">Copy results table</button>
           </div>
+          <div class="row2" style="margin-top:14px; align-items:flex-end;">
+            <div class="field">
+              <label>Run name (optional)</label>
+              <input id="batchRunNameInput" placeholder="e.g. HPLC batch 2026-07-28">
+            </div>
+            <button class="btn-primary" id="saveBatchRunBtn">Save results</button>
+          </div>
+          <span class="save-msg" id="batchRunSaveMsg"></span>
         </div>
-      </div>
+          </div>
     </div>
 
     <div id="isotopeRatioArea" style="display:none;">
@@ -367,10 +383,16 @@
         <input type="file" id="importFileInput" accept=".json,.xlsx">
       </div>
       <span class="hint" id="importStatus"></span>
-      <div class="info-note" style="margin-top:10px;">
+<div class="info-note" style="margin-top:10px;">
         Both formats export and re-import correctly — pick whichever you prefer. Excel also lets you open and read the data directly outside this tool. Importing merges with what's already saved (matching entries by key aren't duplicated).
       </div>
     </div>
+
+    <div class="panel-box" style="margin-bottom:16px;">
+      <div class="panel-box-header"><span class="label">Saved sample runs</span></div>
+      <div id="sampleRunsList"></div>
+    </div>
+
     <div id="historyList"></div>
   </div>
   
