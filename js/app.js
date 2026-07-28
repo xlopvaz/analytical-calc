@@ -122,6 +122,7 @@ document.getElementById("calTypeSeg").addEventListener("click", (e) => {
   btn.classList.add("active");
   state.calType = btn.dataset.val;
   document.getElementById("dilutionFinalField").style.display = state.calType === "addition" ? "flex" : "none";
+  document.getElementById("calBlankSignalISInput").style.display = state.calType === "internal" ? "inline-block" : "none";
   document.getElementById("pointsLabel").textContent =
     state.calType === "addition" ? "Standard addition series points" : "Calibration points";
   document.getElementById("pasteHint").textContent =
@@ -234,10 +235,16 @@ document.getElementById("computeBtn").addEventListener("click", () => {
     if (cols === 3) return p.conc !== "" && p.signal !== "" && p.signalIS !== "" && parseNum(p.signalIS) !== 0;
     return p.conc !== "" && p.signal !== "";
   });
+  const calBlankRaw = document.getElementById("calBlankSignalInput").value;
+  const calBlankIS = document.getElementById("calBlankSignalISInput").value;
+  const calBlankSignal = calBlankRaw !== "" ? parseNum(calBlankRaw) : 0;
+
   const xs = valid.map((p) => parseNum(p.conc));
-  const ys = cols === 3 ? valid.map((p) => parseNum(p.signal) / parseNum(p.signalIS)) : valid.map((p) => parseNum(p.signal));
+  const ys = cols === 3
+    ? valid.map((p) => (parseNum(p.signal) - calBlankSignal) / parseNum(p.signalIS))
+    : valid.map((p) => parseNum(p.signal) - calBlankSignal);
   const reg = linreg(xs, ys);
-  const errBox = document.getElementById("regressionError");
+    const errBox = document.getElementById("regressionError");
   const blankBox = document.getElementById("blankWarningBox");
   if (!reg) {
     errBox.style.display = "block";
@@ -332,14 +339,16 @@ document.getElementById("saveCalBtn").addEventListener("click", () => {
     if (cols === 3) return p.conc !== "" && p.signal !== "" && p.signalIS !== "" && parseNum(p.signalIS) !== 0;
     return p.conc !== "" && p.signal !== "";
   });
+const calBlankVal = document.getElementById("calBlankSignalInput").value;
   const record = {
     key: newId(),
     technique: technique.id,
     analyte: document.getElementById("analyteInput").value || "(unnamed)",
     unit: document.getElementById("unitInput").value,
     calType: state.calType,
+    calBlankSignal: calBlankVal !== "" ? parseNum(calBlankVal) : null,
     points: valid,
-regression: {
+    regression: {
       slope: state.regression.slope,
       intercept: state.regression.intercept,
       r2: state.regression.r2,
@@ -394,8 +403,9 @@ function renderHistory() {
 
 let metaText = `m=${fmt(c.regression.slope)} · b=${fmt(c.regression.intercept)} · R²=${fmt(c.regression.r2, 5)}`;
     metaText += ` · LOD=${fmt(c.regression.lod)} · LOQ=${fmt(c.regression.loq)} ${c.unit}`;
-    if (c.regression.n) metaText += ` · n=${c.regression.n} pts`;
-    if (c.calType === "addition" && c.regression.sampleConc !== null && c.regression.sampleConc !== undefined) {
+if (c.regression.n) metaText += ` · n=${c.regression.n} pts`;
+    if (c.calBlankSignal !== null && c.calBlankSignal !== undefined) metaText += ` · blank subtracted=${fmt(c.calBlankSignal)}`;
+        if (c.calType === "addition" && c.regression.sampleConc !== null && c.regression.sampleConc !== undefined) {
       const seText = c.regression.sampleConcSE !== null && c.regression.sampleConcSE !== undefined ? ` ± ${fmt(c.regression.sampleConcSE, 2)}` : "";
       metaText += ` · sample=${fmt(c.regression.sampleConc)}${seText} ${c.unit}`;
     }

@@ -84,6 +84,15 @@
       <span class="hint">If the addition series was prepared from a pre-diluted aliquot, enter the factor(s) here (e.g. 10, 2) to refer the result back to the original sample.</span>
     </div>
 
+    <div class="field" id="calBlankField">
+      <label>Blank signal (optional)</label>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input id="calBlankSignalInput" placeholder="blank signal" inputmode="decimal" style="max-width:160px;">
+        <input id="calBlankSignalISInput" placeholder="blank IS signal" inputmode="decimal" style="max-width:160px; display:none;">
+      </div>
+      <span class="hint">Subtracted from every calibration point's signal before fitting the line (net-signal correction) — separate from including a 0-concentration point in the curve.</span>
+    </div>
+    
     <div class="panel-box">
       <div class="panel-box-header">
         <span class="label" id="pointsLabel">Calibration points</span>
