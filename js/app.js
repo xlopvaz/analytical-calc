@@ -88,6 +88,14 @@ function uncLabel(base) {
   return state.uncertaintyMode === "ci95" ? `95% CI ${base}` : `SE ${base}`;
 }
 
+document.getElementById("lodMethodSeg").addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  document.querySelectorAll("#lodMethodSeg button").forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  document.getElementById("lodBlankRepsField").style.display = btn.dataset.val === "blankReps" ? "block" : "none";
+});
+
 document.getElementById("uncertaintySeg").addEventListener("click", (e) => {
   const btn = e.target.closest("button");
   if (!btn) return;
@@ -262,7 +270,27 @@ errBox.style.display = "none";
   reg.sampleConc = null;
   reg.sampleConcSE = null;
   reg.totalDil = 1;
-   if (state.calType === "addition") {
+
+  const lodMethod = document.querySelector("#lodMethodSeg button.active").dataset.val;
+  reg.lodMethod = lodMethod;
+  if (lodMethod === "blankReps") {
+    const repsRaw = document.getElementById("lodBlankRepsInput").value;
+    const reps = repsRaw
+      .split(/[\n,\t;]+/)
+      .map((s) => parseNum(s.trim()))
+      .filter((n) => !Number.isNaN(n));
+    if (reps.length >= 2 && reg.slope) {
+      const stats = meanSD(reps);
+      reg.lod = Math.abs((3.3 * stats.sd) / reg.slope);
+      reg.loq = Math.abs((10 * stats.sd) / reg.slope);
+      reg.blankRepsN = stats.n;
+      reg.blankRepsSD = stats.sd;
+    } else {
+      reg.lodMethod = "curve";
+      reg.lodMethodFallback = true; // not enough blank replicates entered — kept the curve-based value
+    }
+  }
+     if (state.calType === "addition") {
     const dil = parseDilutionChain(document.getElementById("dilutionFinalInput").value);
     reg.totalDil = dil;
     if (reg.slope !== 0) {
@@ -317,9 +345,14 @@ function renderResults(reg) {
   grid.appendChild(statBlock("Slope", fmt(reg.slope)));
   grid.appendChild(statBlock("Intercept", fmt(reg.intercept)));
   grid.appendChild(statBlock("R²", fmt(reg.r2, 5), null, reg.r2 >= 0.995 ? COLORS.teal : COLORS.amber));
-grid.appendChild(statBlock("LOD", fmt(reg.lod), isInternal ? "" : unit));
-  grid.appendChild(statBlock("LOQ", fmt(reg.loq), isInternal ? "" : unit));
-  const factor = ciFactor(reg.n);
+const lodLabel = reg.lodMethod === "blankReps" ? "LOD (blank reps)" : "LOD (curve)";
+  const loqLabel = reg.lodMethod === "blankReps" ? "LOQ (blank reps)" : "LOQ (curve)";
+  grid.appendChild(statBlock(lodLabel, fmt(reg.lod), isInternal ? "" : unit));
+  grid.appendChild(statBlock(loqLabel, fmt(reg.loq), isInternal ? "" : unit));
+  if (reg.lodMethodFallback) {
+    grid.appendChild(statBlock("Note", "Not enough blank replicates (need ≥2) — used curve method instead"));
+  }
+    const factor = ciFactor(reg.n);
   grid.appendChild(statBlock(uncLabel("slope"), factor !== null ? fmt(reg.seSlope * factor) : "n/a"));
   grid.appendChild(statBlock(uncLabel("intercept"), factor !== null ? fmt(reg.seIntercept * factor) : "n/a"));
   if (state.calType === "addition") {
@@ -348,13 +381,14 @@ const calBlankVal = document.getElementById("calBlankSignalInput").value;
     calType: state.calType,
     calBlankSignal: calBlankVal !== "" ? parseNum(calBlankVal) : null,
     points: valid,
-    regression: {
+regression: {
       slope: state.regression.slope,
       intercept: state.regression.intercept,
       r2: state.regression.r2,
       lod: state.regression.lod,
       loq: state.regression.loq,
-      sampleConc: state.regression.sampleConc,
+      lodMethod: state.regression.lodMethod,
+            sampleConc: state.regression.sampleConc,
       sampleConcSE: state.regression.sampleConcSE,
       syx: state.regression.syx,
       n: state.regression.n,
@@ -402,8 +436,9 @@ function renderHistory() {
     left.appendChild(nameLine);
 
 let metaText = `m=${fmt(c.regression.slope)} · b=${fmt(c.regression.intercept)} · R²=${fmt(c.regression.r2, 5)}`;
-    metaText += ` · LOD=${fmt(c.regression.lod)} · LOQ=${fmt(c.regression.loq)} ${c.unit}`;
-if (c.regression.n) metaText += ` · n=${c.regression.n} pts`;
+const lodTag = c.regression.lodMethod === "blankReps" ? " (blank reps)" : " (curve)";
+    metaText += ` · LOD=${fmt(c.regression.lod)}${lodTag} · LOQ=${fmt(c.regression.loq)}${lodTag} ${c.unit}`;
+    if (c.regression.n) metaText += ` · n=${c.regression.n} pts`;
     if (c.calBlankSignal !== null && c.calBlankSignal !== undefined) metaText += ` · blank subtracted=${fmt(c.calBlankSignal)}`;
         if (c.calType === "addition" && c.regression.sampleConc !== null && c.regression.sampleConc !== undefined) {
       const seText = c.regression.sampleConcSE !== null && c.regression.sampleConcSE !== undefined ? ` ± ${fmt(c.regression.sampleConcSE, 2)}` : "";

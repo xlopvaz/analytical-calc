@@ -92,6 +92,20 @@
       </div>
       <span class="hint">Subtracted from every calibration point's signal before fitting the line (net-signal correction) — separate from including a 0-concentration point in the curve.</span>
     </div>
+
+    <div class="field">
+      <label>LOD/LOQ method</label>
+      <div class="segmented" id="lodMethodSeg">
+        <button class="active" data-val="curve">Calibration curve (Sy/x)</button>
+        <button data-val="blankReps">Blank replicates</button>
+      </div>
+    </div>
+
+    <div class="field" id="lodBlankRepsField" style="display:none;">
+      <label>Blank replicate signals (one per line, or comma/tab separated — min. 2)</label>
+      <textarea id="lodBlankRepsInput" placeholder="0.8&#10;1.1&#10;0.9&#10;1.0"></textarea>
+      <span class="hint">LOD/LOQ computed as 3.3×SD/slope and 10×SD/slope, using the standard deviation of these replicate blank measurements (IUPAC / ICH Q2 blank-based method) — instead of the residual SD of the calibration curve.</span>
+    </div>
     
     <div class="panel-box">
       <div class="panel-box-header">
