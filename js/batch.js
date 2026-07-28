@@ -317,9 +317,9 @@ function recomputeRow() {
         const conc = rawConc * dil;
         const belowLOQ = reg.loq !== null && reg.loq !== undefined && conc < reg.loq;
 
-        const factor = getCiFactor ? getCiFactor(reg.n) : 1;
+const factor = getCiFactor ? getCiFactor(reg.n) : 1;
         const seRaw = reg.sxx ? concentrationSE(reg, rawConc, 1) : null;
-        const seText = seRaw !== null && factor !== null ? ` ± ${fmt(seRaw * dil * factor, 2)}` : "";
+        const seText = seRaw !== null && factor !== null ? ` ± ${fmt(seRaw * dil * factor, 3)}` : "";
 
         return `${n}: ${fmt(conc)}${seText} ${state.activeBatch.unit}${belowLOQ ? " ⚠" : ""}`;
       });
@@ -327,11 +327,12 @@ function recomputeRow() {
     }
         recomputeRow();
 
-    wrapper.appendChild(row);
+wrapper.appendChild(row);
     wrapper.appendChild(resultsLine);
+    wrapper.recompute = recomputeRow;
     return wrapper;
   }
-
+  
   document.getElementById("addBatchSampleBtn").addEventListener("click", () => {
     if (!state.activeBatch) return;
     const rowData = { id: newId(), name: "", values: {} };

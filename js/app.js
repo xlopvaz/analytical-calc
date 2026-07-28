@@ -211,7 +211,8 @@ document.getElementById("uncertaintySeg").addEventListener("click", (e) => {
   state.uncertaintyMode = btn.dataset.val;
   if (state.regression) renderResults(state.regression);
   updateBlankDisplay();
-  document.querySelectorAll("#samplesRows .samples-row").forEach((row) => row.recompute && row.recompute());
+document.querySelectorAll("#samplesRows .samples-row").forEach((row) => row.recompute && row.recompute());
+  document.querySelectorAll("#batchSamplesRows > div").forEach((row) => row.recompute && row.recompute());
   if (document.getElementById("panel-history").classList.contains("active")) renderHistory();
 });
 

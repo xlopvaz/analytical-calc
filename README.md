@@ -102,8 +102,3 @@ Other ideas:
 - Export results as CSV/PDF instead of copy-to-clipboard.
 - Blank-based LOD/LOQ as an alternative to curve-based.
 - Optional: propagate measurement uncertainty through the dilution chain.
-
-## License
-
-Personal project — no license chosen yet. Add one (MIT is a common,
-permissive choice) before sharing this more widely.
