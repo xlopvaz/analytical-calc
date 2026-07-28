@@ -351,11 +351,29 @@
     </div>
   </div>
 
-  <!-- HISTORY TAB -->
+<!-- HISTORY TAB -->
   <div class="tab-panel" id="panel-history">
+    <div class="panel-box" style="margin-bottom:16px;">
+      <div class="panel-box-header"><span class="label">Backup / transfer data</span></div>
+      <div class="btn-row" style="margin-bottom:12px;">
+        <div class="segmented" id="exportFormatSeg" style="max-width:200px;">
+          <button class="active" data-val="json">JSON</button>
+          <button data-val="xlsx">Excel</button>
+        </div>
+        <button class="btn-primary" id="exportBtn">Export all data</button>
+      </div>
+      <div class="field" style="max-width:340px;">
+        <label>Import a backup file (.json or .xlsx)</label>
+        <input type="file" id="importFileInput" accept=".json,.xlsx">
+      </div>
+      <span class="hint" id="importStatus"></span>
+      <div class="info-note" style="margin-top:10px;">
+        Both formats export and re-import correctly — pick whichever you prefer. Excel also lets you open and read the data directly outside this tool. Importing merges with what's already saved (matching entries by key aren't duplicated).
+      </div>
+    </div>
     <div id="historyList"></div>
   </div>
-
+  
   <div class="footer-note">
     Personal calculation tool — always double-check results against your own analytical judgment. LOD/LOQ estimated as 3.3·Sy/x/m and 10·Sy/x/m. Calibrations are saved locally in this browser (localStorage).
     <div class="footer-author">Xoel López Vázquez · Chemist, University of Vigo</div>
@@ -363,6 +381,7 @@
 
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>
