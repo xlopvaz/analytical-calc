@@ -929,6 +929,21 @@ document.getElementById("addToSequenceBtn").addEventListener("click", () => {
   const label = document.getElementById("repLabelInput").value || "(unnamed)";
   const type = document.querySelector("#repTypeSeg button.active").dataset.val;
   addSsbRow({ label, type, ratio: lastRepStats.mean });
+
+  // Smart default: flip Type to the opposite for the next entry, since a
+  // typical sequence alternates Standard → Sample → Standard → Sample...
+  const nextType = type === "standard" ? "sample" : "standard";
+  document.querySelectorAll("#repTypeSeg button").forEach((b) => {
+    b.classList.toggle("active", b.dataset.val === nextType);
+  });
+
+  // Clear the label and replicate values so the previous entry can't be
+  // accidentally re-added or mistaken for the next one.
+  document.getElementById("repLabelInput").value = "";
+  document.getElementById("repValuesInput").value = "";
+  document.getElementById("repStatsOutput").innerHTML = "";
+  document.getElementById("addToSequenceBtn").style.display = "none";
+  lastRepStats = null;
 });
 
 function addSsbRow(data) {
