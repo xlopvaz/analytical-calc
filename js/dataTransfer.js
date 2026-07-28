@@ -6,7 +6,7 @@
 // Excel support uses SheetJS's global `XLSX` object, loaded via a plain
 // <script> tag in index.html (not an ES module) before this file runs.
 
-import { loadHistory, persistHistory, loadBatches, persistBatches } from "./storage.js";
+import { loadHistory, persistHistory, loadBatches, persistBatches, loadSampleRuns, persistSampleRuns } from "./storage.js";
 
 function download(filename, blob) {
   const url = URL.createObjectURL(blob);
@@ -25,8 +25,9 @@ function exportJSON() {
     exportedAt: new Date().toISOString(),
     calibrations: loadHistory(),
     batches: loadBatches(),
+    sampleRuns: loadSampleRuns(),
   };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   download(`analytical-calculator-backup-${Date.now()}.json`, blob);
 }
 
@@ -99,11 +100,45 @@ function exportXLSX() {
     });
   });
 
+const runs = loadSampleRuns();
+  const runMeta = runs.map((r) => ({
+    key: r.key,
+    technique: r.technique,
+    kind: r.kind,
+    name: r.name,
+    savedAt: new Date(r.savedAt).toISOString(),
+  }));
+  const runResults = [];
+  runs.forEach((r) => {
+    if (r.kind === "batch") {
+      const analyteNames = Object.keys(r.batchSnapshot?.analytes || {});
+      (r.samples || []).forEach((s) => {
+        analyteNames.forEach((n) => {
+          const v = s.values?.[n] || {};
+          runResults.push({ runKey: r.key, sample: s.name, analyte: n, signal: v.signal ?? "", dilution: v.dilution ?? "" });
+        });
+      });
+    } else {
+      (r.samples || []).forEach((s) => {
+        runResults.push({
+          runKey: r.key,
+          sample: s.name,
+          analyte: r.calSnapshot?.analyte ?? "",
+          signal: s.signal ?? "",
+          signalIS: s.signalIS ?? "",
+          dilution: s.dilution ?? "",
+        });
+      });
+    }
+  });
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(calMeta), "Calibrations");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(calPoints), "Calibration_Points");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(batchMeta), "Batches");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(batchAnalytes), "Batch_Analytes");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(runMeta), "Sample_Runs");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(runResults), "Sample_Run_Results");
   XLSX.writeFile(wb, `analytical-calculator-backup-${Date.now()}.xlsx`);
 }
 
