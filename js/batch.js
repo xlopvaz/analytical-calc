@@ -13,7 +13,7 @@
 // no per-analyte chart. All of these exist in the single-analyte workflow;
 // they can be ported here later if needed.
 
-import { linreg, fmt, parseNum, parseDilutionChain } from "./math.js";
+import { linreg, fmt, parseNum, parseDilutionChain, concentrationSE } from "./math.js";
 import { loadBatches, persistBatches } from "./storage.js";
 
 function el(tag, attrs, children) {
@@ -37,8 +37,8 @@ const newId = () => "batch_" + Date.now() + "_" + idCounter++;
  * @param {() => string} getActiveTechId - returns the currently selected technique id
  * @param {() => string} getUnit - returns the current unit string to tag saved batches with
  */
-export function initBatchModule(getActiveTechId, getUnit) {
-  const state = {
+export function initBatchModule(getActiveTechId, getUnit, getCiFactor) {
+      const state = {
     calPoints: [], // { id, analyte, conc, signal }
     regressions: null, // { [analyteName]: regression }
     savedBatches: loadBatches(),
@@ -187,11 +187,14 @@ export function initBatchModule(getActiveTechId, getUnit) {
     const name = document.getElementById("batchNameInput").value || "(unnamed batch)";
     const unit = getUnit();
     const analytes = {};
-    Object.keys(state.regressions).forEach((k) => {
+Object.keys(state.regressions).forEach((k) => {
       const r = state.regressions[k];
-      analytes[k] = { slope: r.slope, intercept: r.intercept, r2: r.r2, lod: r.lod, loq: r.loq, n: r.n, calMin: r.calMin, calMax: r.calMax };
+      analytes[k] = {
+        slope: r.slope, intercept: r.intercept, r2: r.r2, lod: r.lod, loq: r.loq, n: r.n,
+        calMin: r.calMin, calMax: r.calMax, sxx: r.sxx, mx: r.mx, syx: r.syx,
+      };
     });
-    const record = { key: newId(), technique: getActiveTechId(), name, unit, analytes, savedAt: Date.now() };
+        const record = { key: newId(), technique: getActiveTechId(), name, unit, analytes, savedAt: Date.now() };
     state.savedBatches.unshift(record);
     persistBatches(state.savedBatches);
     const msg = document.getElementById("batchSaveMsg");
@@ -304,19 +307,25 @@ export function initBatchModule(getActiveTechId, getUnit) {
     row.appendChild(rmBtn);
 
     const resultsLine = el("div", { class: "hint", style: "margin-top:2px; margin-bottom:4px;" });
-    function recomputeRow() {
+function recomputeRow() {
       const parts = names.map((n) => {
         const reg = state.activeBatch.analytes[n];
         const sigVal = parseNum(rowData.values[n].signal);
         if (!reg || !reg.slope || Number.isNaN(sigVal)) return `${n}: —`;
         const dil = parseDilutionChain(rowData.values[n].dilution);
-        const conc = ((sigVal - reg.intercept) / reg.slope) * dil;
+        const rawConc = (sigVal - reg.intercept) / reg.slope;
+        const conc = rawConc * dil;
         const belowLOQ = reg.loq !== null && reg.loq !== undefined && conc < reg.loq;
-        return `${n}: ${fmt(conc)} ${state.activeBatch.unit}${belowLOQ ? " ⚠" : ""}`;
+
+        const factor = getCiFactor ? getCiFactor(reg.n) : 1;
+        const seRaw = reg.sxx ? concentrationSE(reg, rawConc, 1) : null;
+        const seText = seRaw !== null && factor !== null ? ` ± ${fmt(seRaw * dil * factor, 2)}` : "";
+
+        return `${n}: ${fmt(conc)}${seText} ${state.activeBatch.unit}${belowLOQ ? " ⚠" : ""}`;
       });
       resultsLine.textContent = parts.join("   ·   ");
     }
-    recomputeRow();
+        recomputeRow();
 
     wrapper.appendChild(row);
     wrapper.appendChild(resultsLine);

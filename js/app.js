@@ -1063,4 +1063,4 @@ renderTechniqueStrip();
 applyTechniqueDefaults();
 refreshCalSelect();
 updateSamplesModeVisibility();
-initBatchModule(() => state.activeTechId, () => document.getElementById("unitInput").value);
+initBatchModule(() => state.activeTechId, () => document.getElementById("unitInput").value, ciFactor);
