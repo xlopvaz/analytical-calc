@@ -400,13 +400,13 @@ errBox.style.display = "none";
      if (state.calType === "addition") {
     const dil = parseDilutionChain(document.getElementById("dilutionFinalInput").value);
     reg.totalDil = dil;
-    if (reg.slope !== 0) {
-      const x0 = -reg.intercept / reg.slope;
-      reg.sampleConc = x0 * dil;
-      const se = concentrationSE(reg, x0, Infinity);
+if (reg.slope !== 0) {
+      const x0 = -reg.intercept / reg.slope; // this is the x-intercept itself (negative by construction)
+      reg.sampleConc = -x0 * dil; // the sample concentration is the positive magnitude: intercept/slope
+      const se = concentrationSE(reg, x0, Infinity); // uncertainty evaluated at the actual x-intercept point
       reg.sampleConcSE = se !== null ? se * dil : null;
     }
-  }
+    }
 
   // Blank (0-concentration point) sanity check: flag it if its residual from
   // the fitted line is unusually large compared to the overall scatter.
