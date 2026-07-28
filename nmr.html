@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NMR Interpretation Reference</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header-row">
+    <svg class="atom-icon" width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <path d="M6 26 Q10 8 14 26 T22 26 T30 26 T34 20" stroke="#2DD4BF" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <circle cx="14" cy="26" r="2.2" fill="#E23FA0"/>
+      <circle cx="22" cy="26" r="2.2" fill="#9D5CFF"/>
+    </svg>
+    <div>
+      <span class="eyebrow">ANALYTICAL CHEMISTRY</span>
+      <h1>NMR Interpretation Reference</h1>
+      <p class="subtitle">Chemical-shift lookup and n+1 multiplicity hints — a reference aid, not an automatic structure solver.</p>
+    </div>
+  </div>
+
+  <div class="divider"><svg width="100%" height="34" viewBox="0 0 400 34" preserveAspectRatio="none"></svg></div>
+
+  <div style="margin-bottom:16px;">
+    <a href="index.html" class="btn-ghost" style="text-decoration:none; display:inline-block;">← Back to concentration calculator</a>
+  </div>
+
+  <div class="info-note" style="margin-bottom:20px;">
+    These are <b>general textbook chemical-shift ranges</b> — real spectra overlap a lot between categories, and solvent, concentration, and neighboring groups shift things further. Use this to narrow down possibilities, not as a definitive structure assignment. Always cross-check with your own chemical reasoning.
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="h1">¹H NMR</button>
+    <button class="tab-btn" data-tab="c13">¹³C NMR</button>
+    <button class="tab-btn" data-tab="formula">Molecular formula tools</button>
+  </div>
+
+  <!-- 1H TAB -->
+  <div class="tab-panel active" id="panel-h1">
+    <div class="panel-box">
+      <div class="panel-box-header"><span class="label">Peaks (shift, multiplicity, integral)</span></div>
+      <div class="points-head" style="grid-template-columns:1fr 1fr 1fr 28px;">
+        <span>Shift (ppm)</span><span>Multiplicity</span><span>Integral</span><span></span>
+      </div>
+      <div id="hPeaksRows"></div>
+      <button class="btn-ghost" id="addHPeakBtn" style="margin-top:8px; padding:6px 12px; font-size:12px;">+ Add peak</button>
+
+      <div class="field" style="margin-top:16px;">
+        <label>Or paste (shift, multiplicity, integral — one peak per line)</label>
+        <textarea id="hPasteTextarea" placeholder="7.34, m, 5&#10;4.12, q, 2&#10;1.24, t, 3"></textarea>
+        <div class="btn-row" style="margin-top:8px;">
+          <button class="btn-ghost" id="applyHPasteBtn">Parse data</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-top:14px;">
+      <button class="btn-primary" id="analyzeHBtn">Analyze</button>
+    </div>
+
+    <div id="hResultsBox" style="margin-top:16px;"></div>
+    <div class="panel-box" id="hIntegrationSummary" style="margin-top:16px; display:flex; flex-direction:column; gap:4px;"></div>
+  </div>
+
+  <!-- 13C TAB -->
+  <div class="tab-panel" id="panel-c13">
+    <div class="panel-box">
+      <div class="panel-box-header"><span class="label">Peaks (shift only — typically proton-decoupled)</span></div>
+      <div class="points-head" style="grid-template-columns:1fr 28px;">
+        <span>Shift (ppm)</span><span></span>
+      </div>
+      <div id="cPeaksRows"></div>
+      <button class="btn-ghost" id="addCPeakBtn" style="margin-top:8px; padding:6px 12px; font-size:12px;">+ Add peak</button>
+
+      <div class="field" style="margin-top:16px;">
+        <label>Or paste (one shift per line, or comma-separated)</label>
+        <textarea id="cPasteTextarea" placeholder="171.2&#10;128.4&#10;60.9&#10;14.1"></textarea>
+        <div class="btn-row" style="margin-top:8px;">
+          <button class="btn-ghost" id="applyCPasteBtn">Parse data</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-top:14px;">
+      <button class="btn-primary" id="analyzeCBtn">Analyze</button>
+    </div>
+
+    <div id="cResultsBox" style="margin-top:16px;"></div>
+  </div>
+
+  <!-- FORMULA TOOLS TAB -->
+  <div class="tab-panel" id="panel-formula">
+    <div class="panel-box">
+      <div class="panel-box-header"><span class="label">Degree of unsaturation</span></div>
+      <div class="field" style="max-width:260px;">
+        <label>Molecular formula</label>
+        <input id="formulaInput" placeholder="e.g. C8H10O2">
+      </div>
+      <span class="hint">Also used automatically in the ¹H tab to cross-check total H count against your normalized integration, if filled in.</span>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn-primary" id="computeFormulaBtn">Calculate</button>
+      </div>
+      <div id="formulaResultsBox" style="margin-top:12px; display:flex; flex-direction:column; gap:4px;"></div>
+      <div class="info-note" style="margin-top:12px;">
+        Degree of unsaturation = C − (H+halogens)/2 + N/2 + 1. Each ring or π bond (double bond) counts as 1; a triple bond counts as 2; a benzene ring counts as 4 (one ring + three double bonds).
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    Reference aid only — general literature ranges, not a substitute for full spectral analysis (2D NMR, coupling constants, comparison with known compounds). Nothing here is saved between visits.
+    <div class="footer-author">Xoel López Vázquez · Chemist, University of Vigo</div>
+  </div>
+
+</div>
+
+<script>
+document.querySelectorAll(".tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
+  });
+});
+</script>
+<script type="module" src="js/nmr.js"></script>
+</body>
+</html>
