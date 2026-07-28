@@ -41,33 +41,10 @@ icpms-calculator/
     └── app.js           # DOM wiring: tabs, forms, tables, event listeners
 ```
 
-`techniques.js` exists so that adding a new technique later (UV-Vis, HPLC,
-...) means adding an entry there and reusing `math.js`, rather than
-rewriting the calibration logic. Saved calibrations already carry a
-`technique` field for this reason, even though only `"icpms"` exists today.
-
-No npm, no dependencies, no build step. `app.js` is loaded as an ES module
-(`<script type="module">`), so `index.html` needs to be served over
-`http://`, not opened directly as a `file://` path — see "Running it
-locally" below.
-
-## Running it locally
-
-Because the JS is split into ES modules, opening `index.html` by double
-clicking it will fail in most browsers (module loading is blocked over
-`file://`). Easiest fix in VS Code:
-
-1. Install the **Live Server** extension (Extensions panel → search "Live
-   Server" by Ritwick Dey → Install).
-2. Right-click `index.html` in the file explorer → **"Open with Live
-   Server"**.
-3. It opens in your browser at `http://127.0.0.1:5500/` and reloads
-   automatically whenever you save a file.
 
 ## Deploying
 
-Push to GitHub and enable **GitHub Pages** (Settings → Pages → Deploy from
-branch → `main` → `/root`). The site will be served at
+Push to GitHub and enable **GitHub Pages.** The site will be served at
 `https://<username>.github.io/icpms-calculator/`.
 
 ## Calculation notes
