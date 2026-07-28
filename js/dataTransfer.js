@@ -7,6 +7,7 @@
 // <script> tag in index.html (not an ES module) before this file runs.
 
 import { loadHistory, persistHistory, loadBatches, persistBatches, loadSampleRuns, persistSampleRuns } from "./storage.js";
+import { parseNum, parseDilutionChain, concentrationSE } from "./math.js";
 
 function download(filename, blob) {
   const url = URL.createObjectURL(blob);
@@ -108,30 +109,81 @@ const runs = loadSampleRuns();
     name: r.name,
     savedAt: new Date(r.savedAt).toISOString(),
   }));
-  const runResults = [];
+const runResults = [];
   runs.forEach((r) => {
     if (r.kind === "batch") {
       const analyteNames = Object.keys(r.batchSnapshot?.analytes || {});
       (r.samples || []).forEach((s) => {
         analyteNames.forEach((n) => {
           const v = s.values?.[n] || {};
-          runResults.push({ runKey: r.key, sample: s.name, analyte: n, signal: v.signal ?? "", dilution: v.dilution ?? "" });
+          const reg = r.batchSnapshot?.analytes?.[n];
+          let concentration = "";
+          let concentrationSEval = "";
+          const sigVal = parseNum(v.signal);
+          if (reg && reg.slope && !Number.isNaN(sigVal)) {
+            const dil = parseDilutionChain(v.dilution);
+            const rawConc = (sigVal - reg.intercept) / reg.slope;
+            concentration = rawConc * dil;
+            const seRaw = reg.sxx ? concentrationSE(reg, rawConc, 1) : null;
+            if (seRaw !== null) concentrationSEval = seRaw * dil;
+          }
+          runResults.push({
+            runKey: r.key, sample: s.name, analyte: n,
+            signal: v.signal ?? "", dilution: v.dilution ?? "",
+            concentration, concentrationSE_68pct: concentrationSEval, unit: r.batchSnapshot?.unit ?? "",
+          });
         });
       });
     } else {
+      const reg = r.calSnapshot?.regression;
+      const isInternal = r.calSnapshot?.calType === "internal";
+
+      let blankConc = 0, blankSE = 0;
+      if (reg && reg.slope && r.blankSignal) {
+        let bConc = null;
+        if (isInternal) {
+          if (r.blankSignalIS && parseNum(r.blankSignalIS) !== 0) {
+            const ratio = parseNum(r.blankSignal) / parseNum(r.blankSignalIS);
+            bConc = (ratio - reg.intercept) / reg.slope;
+          }
+        } else {
+          bConc = (parseNum(r.blankSignal) - reg.intercept) / reg.slope;
+        }
+        if (bConc !== null && !Number.isNaN(bConc)) {
+          blankConc = bConc;
+          blankSE = concentrationSE(reg, bConc, 1) || 0;
+        }
+      }
+
       (r.samples || []).forEach((s) => {
+        let rawConc = null;
+        if (isInternal) {
+          if (s.signal !== "" && s.signalIS !== "" && parseNum(s.signalIS) !== 0) {
+            const ratio = parseNum(s.signal) / parseNum(s.signalIS);
+            rawConc = (ratio - reg.intercept) / reg.slope;
+          }
+        } else if (s.signal !== "" && reg && reg.slope) {
+          rawConc = (parseNum(s.signal) - reg.intercept) / reg.slope;
+        }
+
+        let concentration = "";
+        let concentrationSEval = "";
+        if (rawConc !== null && !Number.isNaN(rawConc)) {
+          const dil = parseDilutionChain(s.dilution);
+          concentration = rawConc * dil - blankConc;
+          const seRaw = concentrationSE(reg, rawConc, 1);
+          if (seRaw !== null) concentrationSEval = Math.sqrt((seRaw * dil) ** 2 + blankSE ** 2);
+        }
+
         runResults.push({
-          runKey: r.key,
-          sample: s.name,
-          analyte: r.calSnapshot?.analyte ?? "",
-          signal: s.signal ?? "",
-          signalIS: s.signalIS ?? "",
-          dilution: s.dilution ?? "",
+          runKey: r.key, sample: s.name, analyte: r.calSnapshot?.analyte ?? "",
+          signal: s.signal ?? "", signalIS: s.signalIS ?? "", dilution: s.dilution ?? "",
+          concentration, concentrationSE_68pct: concentrationSEval, unit: r.calSnapshot?.unit ?? "",
         });
       });
     }
   });
-
+  
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(calMeta), "Calibrations");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(calPoints), "Calibration_Points");
