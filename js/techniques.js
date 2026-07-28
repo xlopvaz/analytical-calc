@@ -34,15 +34,17 @@ export const TECHNIQUES = {
     notes:
       "Isotope-ratio precision (replicate statistics) and sample-standard bracketing (SSB) correction against a certified reference material. Not a calibration-curve concentration method — lives in its own section of the Samples tab.",
   },
-    icpoes: {
+icpoes: {
     id: "icpoes",
     label: "ICP-OES",
     fullName: "ICP Optical Emission Spectrometry",
     defaultUnit: "mg/L",
     signalLabel: "emission intensity",
-    status: "coming-soon",
+    status: "available",
+    kind: "curve",
+    notes: "Concentration by calibration curve (external / internal standard / standard addition) — same engine as ICP-MS, with emission intensity as the signal instead of counts.",
   },
-  aas: {
+    aas: {
     id: "aas",
     label: "AAS",
     fullName: "Atomic Absorption Spectroscopy",
